@@ -6,9 +6,13 @@ import ServiceCard from "@/components/ServiceCard";
 import Carousel from "@/components/Carousel";
 import ServiceModal from "@/components/ServiceModal";
 import { useState } from "react";
+import ContactForm from "@/components/ContactForm";
+import CoursesMini from "@/components/CoursesMini";
+
 
 export default function Home() {
   const [selected, setSelected] = useState<number | null>(null);
+  const [contactService, setContactService] = useState<string>("General"); // 👈 NUEVO
 
   const servicios = [
     {
@@ -55,6 +59,19 @@ export default function Home() {
       bullets: ["Por horas o jornada", "Suministros incluidos (opcional)", "Checklists por área"],
       img: "/hogar1.jpg",
     },
+    {
+      t: "Limpieza de centros comerciales y retail",
+      d: "Mantenimiento integral de espacios con alta afluencia de personas.",
+      long:
+        "Ofrecemos servicios de limpieza continua en centros comerciales, tiendas y espacios de retail, con personal certificado y equipos de alta eficiencia. Nos adaptamos a los horarios operativos y mantenemos áreas comunes, vitrinas, pasillos, baños y zonas de alimentación en condiciones óptimas.",
+      bullets: [
+        "Limpieza en horarios flexibles (diurno y nocturno)",
+        "Equipos y maquinaria industrial incluida",
+        "Protocolos de bioseguridad y sanitización continua"
+      ],
+      img: "/retail3.jpg",
+    },
+
     {
       t: "Limpieza y mantenimiento de áreas verdes",
       d: "Podas, riegos y mantenimiento de jardines para conservar espacios naturales y agradables.",
@@ -146,6 +163,7 @@ export default function Home() {
         </div>
       </Section>
 
+
       {/* SERVICIOS */}
       <Section id="servicios" title="Servicios que prestamos">
         <ul className="grid grid-cols-1 gap-6 sm:grid-cols-2 lg:grid-cols-3">
@@ -156,7 +174,7 @@ export default function Home() {
                 desc={s.d}
                 img={s.img}
                 selected={selected === i}
-                onSelect={() => setSelected(i)} // abre el modal
+                onSelect={() => setSelected(i)}
               />
             </li>
           ))}
@@ -179,6 +197,56 @@ export default function Home() {
           ))}
         </ul>
       </Section>
+      
+      {/* CAPACITACIONES */}
+      <Section id="capacitaciones" title="Cursos y Capacitación">
+        <CoursesMini
+          items={[
+            {
+              t: "Manejo y segregación de desechos",
+              st: "Comunes, orgánicos, inorgánicos y biopeligrosos",
+              img: "/cursos/desechos.jpg",
+            },
+            {
+              t: "Competencias laborales (Operario de Limpieza)",
+              st: "Buenas prácticas, productividad y control de calidad",
+              img: "/cursos/laborales.jpg",
+            },
+            {
+              t: "Limpieza hospitalaria",
+              st: "Rutina, terminal y gestión de riesgos en unidades de salud",
+              img: "/cursos/hospitalaria.jpg",
+            },
+            {
+              t: "Trabajos en alturas",
+              st: "Uso de EPP, líneas de vida y procedimientos seguros",
+              img: "/cursos/alturas.webp",
+            },
+            {
+              t: "Riesgos psicosociales",
+              st: "Identificación, prevención y primeros auxilios psicológicos",
+              img: "/cursos/riesgos.png",
+            },
+            {
+              t: "Bioseguridad hospitalaria",
+              st: "Barreras, control de infecciones y trazabilidad",
+              img: "/cursos/bioseguridad.jpeg",
+            },
+            {
+              t: "Atención al usuario",
+              st: "Protocolo de servicio y resolución de incidencias",
+              img: "/cursos/usuario.jpg",
+            },
+            {
+              t: "Disolución y manejo de químicos",
+              st: "Diluciones seguras, MSDS y almacenamiento",
+              img: "/cursos/quimicos.jpg",
+            },
+          ]}
+        />
+      </Section>
+
+
 
       {/* CLIENTES Y ALIADOS */}
       <Section id="clientes" title="Nuestros clientes y aliados">
@@ -228,8 +296,7 @@ export default function Home() {
         rounded="rounded-2xl"
       />
 
-
-      {/* CONTACTO */}
+     {/* CONTACTO */}
       <Section id="contacto" title="Contáctanos" subtitle="Cotiza tu servicio">
         <div className="grid sm:grid-cols-2 gap-6">
           <div>
@@ -237,12 +304,7 @@ export default function Home() {
             <p className="text-gray-700">Email: asoserlid@outlook.es</p>
             <p className="text-gray-700">Dirección: Barcelona y Madrid, Ambato</p>
           </div>
-          <form action="https://formspree.io/f/yourid" method="POST" className="space-y-2">
-            <input required name="name" placeholder="Nombre" className="w-full border rounded p-2" />
-            <input required name="email" type="email" placeholder="Email" className="w-full border rounded p-2" />
-            <textarea required name="message" placeholder="Mensaje" className="w-full border rounded p-2 min-h-32" />
-            <button className="px-4 py-2 rounded bg-black text-white">Enviar</button>
-          </form>
+          <ContactForm defaultService={contactService} /> {/* 👈 ahora precarga */}
         </div>
       </Section>
 
@@ -251,6 +313,11 @@ export default function Home() {
         open={open}
         onClose={() => setSelected(null)}
         service={current}
+        onRequest={(serviceName) => {
+          setContactService(serviceName);       // 1) setea el servicio
+          // 2) scroll suave (si aún no lo tienes global)
+          document.getElementById("contacto")?.scrollIntoView({ behavior: "smooth" });
+        }}
       />
     </main>
   );
