@@ -24,3 +24,44 @@ body {
   color: var(--foreground);
   font-family: Arial, Helvetica, sans-serif;
 }
+.prose p { margin-bottom: 0.75rem; }
+:root {
+  --color-primary: #33C3C9;
+  --color-secondary: #652B71;
+  --color-accent: #173C61;
+  --color-dark: #3A3A3A;
+  --color-light: #ffffff;
+}
+
+/* Fuentes y ajustes */
+body {
+  color: var(--color-dark);
+  background-color: var(--color-light);
+}
+
+h1, h2, h3 {
+  color: var(--color-accent);
+}
+a {
+  color: var(--color-primary);
+}
+a:hover {
+  color: var(--color-secondary);
+}
+
+.asoserlid-section h1,
+.asoserlid-section h2,
+.asoserlid-section h3,
+.asoserlid-section p {
+  color: #ffffff !important;
+}
+
+
+@keyframes fade-in {
+  from { opacity: 0; transform: translateY(-10px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+.animate-fade-in {
+  animation: fade-in 1s ease-out both;
+}
+html { scroll-behavior: smooth; }
