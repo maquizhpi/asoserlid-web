@@ -36,7 +36,7 @@ export default function Carousel({ images, aspect = "aspect-[16/9]", rounded = "
     touchStartX.current = null;
   }
 
-  // ✅ Nuevo handler sin expresiones “suelta”
+
   function onKeyDown(e: React.KeyboardEvent<HTMLDivElement>) {
     if (e.key === "ArrowLeft") {
       prev();

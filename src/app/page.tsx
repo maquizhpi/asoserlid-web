@@ -14,7 +14,7 @@ import Image from 'next/image';
 
 export default function Home() {
   const [selected, setSelected] = useState<number | null>(null);
-  const [contactService, setContactService] = useState<string>("General"); // 👈 NUEVO
+  const [contactService, setContactService] = useState<string>("General"); 
 
   const servicios = [
     {
@@ -184,45 +184,62 @@ export default function Home() {
               t: "Manejo y segregación de desechos",
               st: "Comunes, orgánicos, inorgánicos y biopeligrosos",
               img: "/cursos/desechos.jpg",
+              long:
+                "Capacitación enfocada en la correcta clasificación, transporte y disposición final de los desechos generados en áreas de limpieza, mantenimiento y salud. Incluye el uso de recipientes codificados por color, técnicas de separación segura y cumplimiento de la normativa sanitaria ecuatoriana vigente.",
             },
             {
               t: "Competencias laborales (Operario de Limpieza)",
               st: "Buenas prácticas, productividad y control de calidad",
               img: "/cursos/laborales.jpg",
+              long:
+                "Este curso fortalece las habilidades técnicas y blandas del personal operativo, orientado al trabajo eficiente, comunicación efectiva y desempeño de calidad. Se abordan estándares de servicio, puntualidad, manejo de equipos y cumplimiento de procedimientos institucionales.",
             },
             {
               t: "Limpieza hospitalaria",
               st: "Rutina, terminal y gestión de riesgos en unidades de salud",
               img: "/cursos/hospitalaria.jpg",
+              long:
+                "Formación especializada en limpieza y desinfección hospitalaria bajo protocolos del Ministerio de Salud Pública y normativas ISO/IEC 17024. Los participantes aprenden técnicas de aseo rutinario, intermedio y terminal, manejo de áreas críticas y bioseguridad para evitar contaminación cruzada.",
             },
             {
               t: "Trabajos en alturas",
               st: "Uso de EPP, líneas de vida y procedimientos seguros",
               img: "/cursos/alturas.webp",
+              long:
+                "Curso práctico sobre seguridad industrial en actividades que se realizan por encima de los dos metros de altura. Incluye uso correcto de arnés, puntos de anclaje, líneas de vida, inspección de equipos y prevención de caídas conforme a la normativa ecuatoriana de riesgos laborales.",
             },
             {
               t: "Riesgos psicosociales",
               st: "Identificación, prevención y primeros auxilios psicológicos",
               img: "/cursos/riesgos.png",
+              long:
+                "Capacitación orientada a reconocer los factores de riesgo psicosocial que pueden afectar al trabajador: estrés, fatiga, presión laboral o acoso. Se promueve la salud mental en el trabajo mediante estrategias de autocuidado, comunicación y acompañamiento institucional.",
             },
             {
               t: "Bioseguridad hospitalaria",
               st: "Barreras, control de infecciones y trazabilidad",
               img: "/cursos/bioseguridad.jpeg",
+              long:
+                "Formación sobre el correcto uso de equipos de protección personal, normas de higiene y control de infecciones. Los participantes adquieren competencias en trazabilidad de limpieza, control de agentes biológicos y medidas preventivas en ambientes hospitalarios.",
             },
             {
               t: "Atención al usuario",
               st: "Protocolo de servicio y resolución de incidencias",
               img: "/cursos/usuario.jpg",
+              long:
+                "Entrenamiento en atención al cliente interno y externo, enfocado en la cortesía, empatía y respuesta efectiva a las necesidades de los usuarios. Incluye técnicas de comunicación asertiva, resolución de conflictos y representación institucional de ASOSERLID.",
             },
             {
               t: "Disolución y manejo de químicos",
-              st: "Diluciones seguras, MSDS y almacenamiento",
+              st: "Diluciones seguras, MSDS y almacenamiento responsable",
               img: "/cursos/quimicos.jpg",
+              long:
+                "Capacitación técnica sobre la manipulación, dilución y preparación de productos químicos para limpieza profesional. Se revisan fichas de seguridad (MSDS), almacenamiento correcto, compatibilidad de productos y medidas de protección para evitar riesgos a la salud y el ambiente.",
             },
           ]}
         />
       </Section>
+
 
 
 
@@ -245,7 +262,7 @@ export default function Home() {
 
 
 
-      {/* CERTIFICACIONES */}
+      {/* CERTIFICACIONES 
       <Section id="certificaciones" title="Certificaciones">
         <Gallery
           images={[
@@ -255,24 +272,65 @@ export default function Home() {
             { src: "/soy.png", alt: "Soy Solidario" },
           ]}
         />
+      </Section> 
+      */}
+
+      {/* CERTIFICACIONES */}
+      <Section id="certificaciones" title="Certificaciones">
+          <p className="text-gray-700 text-justify leading-relaxed mb-8">
+          En <strong>ASOSERLID</strong>, trabajamos bajo altos estándares de calidad, seguridad y responsabilidad social.
+          Nuestras certificaciones avalan el compromiso con la mejora continua, la excelencia en el servicio de limpieza
+          profesional y el cumplimiento de las normas nacionales e internacionales que rigen la Economía Popular y Solidaria.
+          Estas acreditaciones fortalecen nuestra credibilidad ante instituciones públicas, privadas y de salud,
+          reafirmando que nuestro trabajo se desarrolla con ética, eficiencia y sostenibilidad ambiental.
+        </p>
+        <div className="grid items-center gap-8 grid-cols-2 sm:grid-cols-3 lg:grid-cols-4">
+          {[
+            { src: "/certs/iso9001.png", alt: "Certificación ISO 9001: Gestión de Calidad" },
+            { src: "/certs/inen.png", alt: "Certificación INEN: Calidad y Seguridad Industrial" },
+            { src: "/certs/eps.png", alt: "Certificación Somos EPS: Economía Popular y Solidaria" },
+            { src: "/certs/soy-responsable.png", alt: "Certificación Soy Responsable: Compromiso Ambiental" },
+          ].map((logo) => (
+            <div
+              key={logo.alt}
+              className="
+                flex items-center justify-center
+                rounded-2xl border border-gray-200 bg-white
+                p-6 sm:p-8
+                shadow-md hover:shadow-lg transition-all
+              "
+            >
+              <div className="relative w-full h-32 sm:h-40">
+                <img
+                  src={logo.src}
+                  alt={logo.alt}
+                  className="object-contain w-full h-full"
+                />
+              </div>
+            </div>
+          ))}
+        </div>
       </Section>
 
 
 
+
       {/* GALERÍA */}
-      <Carousel
-        images={[
-          { src: "/work1.jpg", alt: "Trabajo 1" },
-          { src: "/work2.jpg", alt: "Trabajo 2" },
-          { src: "/work3.jpg", alt: "Trabajo 3" },
-          { src: "/work4.jpg", alt: "Trabajo 4" },
-          { src: "/work5.jpg", alt: "Trabajo 5" },
-          { src: "/work6.jpg", alt: "Trabajo 6" },
-          { src: "/work7.jpg", alt: "Trabajo 7" },
-        ]}
-        aspect="aspect-[16/9]"     // puedes usar "aspect-square" o "aspect-[4/3]"
-        rounded="rounded-2xl"
-      />
+      <Section id="galeria" title="Galeria">
+        <Carousel
+          images={[
+            { src: "/work1.jpg", alt: "Trabajo 1" },
+            { src: "/work2.jpg", alt: "Trabajo 2" },
+            { src: "/work3.jpg", alt: "Trabajo 3" },
+            { src: "/work4.jpg", alt: "Trabajo 4" },
+            { src: "/work5.jpg", alt: "Trabajo 5" },
+            { src: "/work6.jpg", alt: "Trabajo 6" },
+            { src: "/work7.jpg", alt: "Trabajo 7" },
+          ]}
+          aspect="aspect-[16/9]"     // puedes usar "aspect-square" o "aspect-[4/3]"
+          rounded="rounded-2xl"
+        />
+      </Section>
 
      {/* CONTACTO */}
       <Section id="contacto" title="Contáctanos" subtitle="Cotiza tu servicio">

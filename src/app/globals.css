@@ -65,3 +65,8 @@ a:hover {
   animation: fade-in 1s ease-out both;
 }
 html { scroll-behavior: smooth; }
+
+html.modal-open,
+body.modal-open {
+  overflow: hidden !important;
+}

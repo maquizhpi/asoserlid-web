@@ -7,10 +7,10 @@ const links = [
   { href: "#quienes-somos", label: "Quiénes somos" },
   { href: "#servicios", label: "Servicios" },
   { href: "#experiencia", label: "Experiencia" },
+  { href: "#capacitaciones", label: "Cursos y Capacitación" },
   { href: "#certificaciones", label: "Certificaciones" },
-  { href: "#equipo", label: "Equipo" },
-  { href: "#galeria", label: "Galería" },
   { href: "#clientes", label: "Clientes" },
+  { href: "#galeria", label: "Galería" },
   { href: "#contacto", label: "Contacto" },
 ];
 
