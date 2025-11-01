@@ -1,62 +1,44 @@
-// src/components/TrainingSection.tsx
-import Image from "next/image";
-import CoursesList from "./CoursesList";
+"use client";
 
-type CourseItem = { title: string; desc: string };
+import clsx from "clsx";
 
-type Props = {
-  id?: string;
-  imageSrc?: string;
-  imageAlt?: string;
-  courses: CourseItem[];
+export type CourseItem = {
+  t: string;        // título
+  st?: string;      // subtítulo
+  img?: string;     // ruta imagen
+  href?: string;    // enlace opcional
 };
 
-export default function TrainingSection({
-  id = "capacitaciones",
-  imageSrc = "/capacitaciones-libreria.jpg",
-  imageAlt = "Librería con manuales y certificaciones",
-  courses,
-}: Props) {
+type Props = {
+  items: CourseItem[];     // ⬅️ ahora sí existirá "items"
+  className?: string;
+};
+
+export default function CoursesList({ items, className }: Props) {
   return (
-    <section id={id} className="relative py-14 sm:py-20">
-      <div className="container mx-auto max-w-7xl px-4">
-        <div className="grid gap-8 lg:grid-cols-[1.2fr,1fr] items-center">
-          <div>
-            <h2 className="text-3xl sm:text-4xl font-extrabold tracking-tight">
-              Cursos y Capacitación de Personal
-            </h2>
-            <p className="mt-3 text-base sm:text-lg opacity-90">
-              Formación continua avalada por SETEC e ISO/IEC 17024.
-            </p>
-            <p className="mt-4 text-sm opacity-80">
-              Fortalecemos competencias para asegurar seguridad, eficiencia y calidad
-              en hospitales, retail, oficinas y más.
-            </p>
+    <ul className={clsx("grid gap-4 sm:grid-cols-2 lg:grid-cols-3", className)}>
+      {items.map((c, i) => (
+        <li key={i} className="border rounded-xl overflow-hidden bg-white shadow-sm">
+          <div className="aspect-[16/9] bg-gray-100">
+            {c.img ? (
+              // Si usas next/image, puedes cambiar a <Image>
+              <img src={c.img} alt={c.t} className="h-full w-full object-cover" />
+            ) : null}
           </div>
-
-          <div className="relative h-64 sm:h-72 lg:h-80 overflow-hidden rounded-2xl ring-1 ring-white/10 shadow">
-            <Image
-              src={imageSrc}
-              alt={imageAlt}
-              fill
-              sizes="(max-width: 1024px) 100vw, 50vw"
-              className="object-cover"
-              priority
-            />
+          <div className="p-4">
+            <div className="font-semibold">{c.t}</div>
+            {c.st ? <div className="text-sm text-gray-600 mt-1">{c.st}</div> : null}
+            {c.href ? (
+              <a
+                href={c.href}
+                className="mt-3 inline-flex text-sky-600 hover:underline"
+              >
+                Ver más
+              </a>
+            ) : null}
           </div>
-        </div>
-
-        <div className="mt-10 sm:mt-12">
-          <CoursesList
-            items={courses}
-            className="mt-2"
-          />
-        </div>
-
-        <div className="mt-6 text-xs opacity-70">
-          * Enfoque en seguridad y salud ocupacional, manejo de químicos y bioseguridad.
-        </div>
-      </div>
-    </section>
+        </li>
+      ))}
+    </ul>
   );
 }
