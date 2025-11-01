@@ -1,4 +1,4 @@
-import { NextResponse } from "next/server";
+import { NextRequest, NextResponse } from "next/server";
 import nodemailer from "nodemailer";
 import { z } from "zod";
 
@@ -11,7 +11,7 @@ const schema = z.object({
   company: z.string().optional(),
 });
 
-export async function POST(req: Request) {
+export async function POST(req: NextRequest)  {
   try {
     const body = await req.json();
     const data = schema.parse(body);
@@ -50,10 +50,24 @@ export async function POST(req: Request) {
     });
 
     return NextResponse.json({ ok: true });
-  } catch (err: any) {
-    console.error("CONTACT ERROR:", err);
-    return NextResponse.json({ ok: false, error: err?.message ?? "Error" }, { status: 400 });
-  }
+    } catch (err: unknown) {
+      console.error("CONTACT ERROR:", err);
+
+      let status = 400;
+      let msg = "Error";
+
+      if (err instanceof z.ZodError) {
+        // Error de validación: 400 con detalle de campos
+        msg = JSON.stringify(err.issues);
+      } else if (err instanceof Error) {
+        // Otros errores (p.ej. SMTP)
+        msg = err.message;
+        status = 500; // puedes dejar 400 si prefieres
+      }
+
+      return NextResponse.json({ ok: false, error: msg }, { status });
+    }
+
 }
 
 function escapeHtml(str: string) {

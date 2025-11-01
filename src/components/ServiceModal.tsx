@@ -16,12 +16,12 @@ export default function ServiceModal({
   open,
   onClose,
   service,
-  onRequest,              // 👈 NUEVO
+  onRequest,              
 }: {
   open: boolean;
   onClose: () => void;
   service: Servicio | null;
-  onRequest?: (serviceName: string) => void; // 👈 NUEVO
+  onRequest?: (serviceName: string) => void;
 }) {
   const dialogRef = useRef<HTMLDivElement>(null);
 
@@ -75,11 +75,9 @@ export default function ServiceModal({
           <div className="mt-6 flex flex-wrap gap-3">
             <a
               href="#contacto"
-              onClick={(e) => {
-                // Rellenar y cerrar
+              onClick={() => {
                 onRequest?.(service.t);
                 onClose();
-                // permitir que el hash haga scroll; si no tienes scroll-behavior, puedes hacer smooth manual
               }}
               className="inline-flex items-center justify-center rounded-lg bg-sky-600 px-4 py-2 text-white hover:bg-sky-700"
             >

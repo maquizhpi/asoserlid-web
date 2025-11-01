@@ -25,8 +25,24 @@ export default function Carousel({ images, aspect = "aspect-[16/9]", rounded = "
   function onTouchEnd(e: React.TouchEvent) {
     if (touchStartX.current == null) return;
     const dx = e.changedTouches[0].clientX - touchStartX.current;
-    if (Math.abs(dx) > 40) (dx > 0 ? prev() : next());
+      if (Math.abs(dx) > 40) {
+        if (dx > 0) {
+          prev();
+        } else {
+          next();
+        }
+      }
+
     touchStartX.current = null;
+  }
+
+  // ✅ Nuevo handler sin expresiones “suelta”
+  function onKeyDown(e: React.KeyboardEvent<HTMLDivElement>) {
+    if (e.key === "ArrowLeft") {
+      prev();
+    } else if (e.key === "ArrowRight") {
+      next();
+    }
   }
 
   return (
@@ -35,7 +51,7 @@ export default function Carousel({ images, aspect = "aspect-[16/9]", rounded = "
       role="region"
       aria-roledescription="carousel"
       aria-label="Galería"
-      onKeyDown={(e) => (e.key === "ArrowLeft" ? prev() : e.key === "ArrowRight" ? next() : null)}
+      onKeyDown={onKeyDown}                 
       tabIndex={0}
     >
       {/* Viewport */}
@@ -65,7 +81,6 @@ export default function Carousel({ images, aspect = "aspect-[16/9]", rounded = "
         aria-label="Anterior"
         className="absolute left-2 top-1/2 -translate-y-1/2 rounded-full bg-white/80 p-2 shadow hover:bg-white"
       >
-        {/* chevron left */}
         <svg width="20" height="20" viewBox="0 0 24 24"><path d="M15 18l-6-6 6-6" stroke="currentColor" strokeWidth="2" fill="none" strokeLinecap="round"/></svg>
       </button>
       <button
@@ -73,7 +88,6 @@ export default function Carousel({ images, aspect = "aspect-[16/9]", rounded = "
         aria-label="Siguiente"
         className="absolute right-2 top-1/2 -translate-y-1/2 rounded-full bg-white/80 p-2 shadow hover:bg-white"
       >
-        {/* chevron right */}
         <svg width="20" height="20" viewBox="0 0 24 24"><path d="M9 6l6 6-6 6" stroke="currentColor" strokeWidth="2" fill="none" strokeLinecap="round"/></svg>
       </button>
 
