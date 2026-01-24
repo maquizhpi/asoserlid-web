@@ -1,9 +1,9 @@
 "use client";
+
 import { useEffect } from "react";
 import { createPortal } from "react-dom";
 import useScrollLock, { hardUnlockScroll } from "@/hook/useScrollLock";
-import React from "react";
-
+import Image from "next/image";
 
 type Props = {
   show: boolean;
@@ -16,25 +16,22 @@ type Props = {
 export default function CourseModal({ show, onClose, title, description, img }: Props) {
   useScrollLock(show);
 
+  // Cerrar con ESC
   useEffect(() => {
     if (!show) return;
-    const onKey = (e: KeyboardEvent) => e.key === "Escape" && onClose();
+
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key === "Escape") onClose();
+    };
+
     window.addEventListener("keydown", onKey);
     return () => window.removeEventListener("keydown", onKey);
   }, [show, onClose]);
 
-  useEffect(() => () => hardUnlockScroll(), []);
-
-  // Cerrar con ESC
-  React.useEffect(() => {
-    if (!show) return;
-    const onKey = (e: KeyboardEvent) => e.key === "Escape" && onClose();
-    window.addEventListener("keydown", onKey);
-    return () => window.removeEventListener("keydown", onKey);
-  }, [show, onClose]);
-
-  // Limpieza “a prueba de balas” cuando se desmonta
-  React.useEffect(() => () => hardUnlockScroll(), []);
+  // Limpieza “a prueba de balas” al desmontar
+  useEffect(() => {
+    return () => hardUnlockScroll();
+  }, []);
 
   if (!show || typeof window === "undefined") return null;
 
@@ -57,9 +54,18 @@ export default function CourseModal({ show, onClose, title, description, img }: 
           ×
         </button>
 
-        {img && (
-          <img src={img} alt={title} className="rounded-xl w-full h-56 object-cover mb-4" />
-        )}
+        {img ? (
+          <div className="relative w-full h-72 rounded-xl bg-gray-50 overflow-hidden mb-4">
+            <Image
+              src={img}
+              alt={title}
+              fill
+              sizes="(max-width: 768px) 100vw, 600px"
+              className="object-contain"
+              priority={false}
+            />
+          </div>
+        ) : null}
 
         <h2 className="text-2xl font-bold mb-2">{title}</h2>
         <p className="text-gray-700 leading-relaxed">{description}</p>

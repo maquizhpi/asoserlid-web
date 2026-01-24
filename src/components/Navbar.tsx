@@ -2,16 +2,21 @@
 
 import { useEffect, useState } from "react";
 import clsx from "clsx";
+import Link from "next/link";
 
-const links = [
-  { href: "#quienes-somos", label: "Quiénes somos" },
-  { href: "#servicios", label: "Servicios" },
-  { href: "#experiencia", label: "Experiencia" },
-  { href: "#capacitaciones", label: "Cursos y Capacitación" },
-  { href: "#certificaciones", label: "Certificaciones" },
-  { href: "#clientes", label: "Clientes" },
-  { href: "#galeria", label: "Galería" },
-  { href: "#contacto", label: "Contacto" },
+type SectionLink = { sectionId: string; label: string };
+type RouteLink = { href: string; label: string; route: true };
+type NavLink = SectionLink | RouteLink;
+
+const links: NavLink[] = [
+  { sectionId: "quienes-somos", label: "Quiénes somos" },
+  { sectionId: "servicios", label: "Servicios" },
+  { sectionId: "capacitaciones", label: "Cursos" },
+  { sectionId: "certificaciones", label: "Certificaciones" },
+  { sectionId: "clientes", label: "Clientes" },
+  { sectionId: "galeria", label: "Galería" },
+  { sectionId: "contacto", label: "Contacto" },
+  { href: "/blog", label: "Blog", route: true },
 ];
 
 export default function Navbar() {
@@ -25,7 +30,6 @@ export default function Navbar() {
     return () => window.removeEventListener("scroll", onScroll);
   }, []);
 
-  // Cierra el panel al pasar a escritorio
   useEffect(() => {
     const handler = () => {
       if (window.innerWidth >= 1024) setOpen(false);
@@ -33,6 +37,27 @@ export default function Navbar() {
     window.addEventListener("resize", handler);
     return () => window.removeEventListener("resize", handler);
   }, []);
+
+  const renderNavLink = (l: NavLink, className = "", onClick?: () => void) => {
+    // Rutas normales (ej. /blog)
+    if ("route" in l && l.route) {
+      return (
+        <Link href={l.href} className={className} onClick={onClick}>
+          {l.label}
+        </Link>
+      );
+    }
+    // Secciones: siempre ir a "/" con hash
+    return (
+      <Link
+        href={{ pathname: "/", hash: l.sectionId }}
+        className={className}
+        onClick={onClick}
+      >
+        {l.label}
+      </Link>
+    );
+  };
 
   return (
     <header
@@ -42,34 +67,34 @@ export default function Navbar() {
       )}
     >
       <nav className="mx-auto flex h-16 max-w-6xl items-center justify-between px-4">
-        {/* Logo */}
-        <a href="#inicio" className="flex items-center gap-2">
+        {/* Logo: siempre al home */}
+        <Link href="/" className="flex items-center gap-2">
           {/* eslint-disable-next-line @next/next/no-img-element */}
           <img src="/logo3.jpg" alt="ASOSERLID" className="h-9 w-auto" />
           <span className="hidden sm:block text-sm font-semibold text-gray-900">
             ASOSERLID
           </span>
-        </a>
+        </Link>
 
         {/* Links escritorio */}
         <ul className="hidden lg:flex items-center gap-5 text-sm">
           {links.map((l) => (
-            <li key={l.href}>
-              <a
-                href={l.href}
-                className="text-gray-700 hover:text-sky-700 transition"
-              >
-                {l.label}
-              </a>
+            <li
+              key={
+                "route" in l && l.route ? `${l.href}-${l.label}` : `${l.sectionId}-${l.label}`
+              }
+            >
+              {renderNavLink(l, "text-gray-700 hover:text-sky-700 transition")}
             </li>
           ))}
           <li>
-            <a
-              href="#contacto"
+            {/* Botón a sección contacto del home */}
+            <Link
+              href={{ pathname: "/", hash: "contacto" }}
               className="rounded-lg bg-sky-600 px-3 py-2 text-white hover:bg-sky-700 transition"
             >
               Cotizar
-            </a>
+            </Link>
           </li>
         </ul>
 
@@ -99,24 +124,26 @@ export default function Navbar() {
       >
         <ul className="space-y-1 border-t bg-white/95 px-4 py-3 text-sm">
           {links.map((l) => (
-            <li key={l.href}>
-              <a
-                href={l.href}
-                className="block rounded-md px-2 py-2 text-gray-800 hover:bg-gray-100"
-                onClick={() => setOpen(false)}
-              >
-                {l.label}
-              </a>
+            <li
+              key={
+                "route" in l && l.route ? `${l.href}-${l.label}` : `${l.sectionId}-${l.label}`
+              }
+            >
+              {renderNavLink(
+                l,
+                "block rounded-md px-2 py-2 text-gray-800 hover:bg-gray-100",
+                () => setOpen(false)
+              )}
             </li>
           ))}
           <li className="pt-2">
-            <a
-              href="#contacto"
+            <Link
+              href={{ pathname: "/", hash: "contacto" }}
               className="block rounded-lg bg-sky-600 px-3 py-2 text-center font-medium text-white hover:bg-sky-700"
               onClick={() => setOpen(false)}
             >
               Solicitar cotización
-            </a>
+            </Link>
           </li>
         </ul>
       </div>

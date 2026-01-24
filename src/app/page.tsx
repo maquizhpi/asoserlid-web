@@ -1,7 +1,6 @@
 "use client";
 
 import Section from "@/components/Section";
-import { Gallery } from "@/components/Gallery";
 import ServiceCard from "@/components/ServiceCard";
 import Carousel from "@/components/Carousel";
 import ServiceModal from "@/components/ServiceModal";
@@ -158,24 +157,7 @@ export default function Home() {
           ))}
         </ul>
       </Section>
-
-      {/* EXPERIENCIA */}
-      <Section id="experiencia" title="Experiencia">
-        <ul className="space-y-3">
-          {[
-            { t: "Red de Agencias Financieras", st: "Mantenimiento y limpieza multi-sede" },
-            { t: "Clínicas & Centros de Salud", st: "Contratos de bioseguridad" },
-          ].map((e, idx) => (
-            <li key={idx} className="border rounded-xl p-4 flex items-center justify-between">
-              <div>
-                <div className="font-semibold">{e.t}</div>
-                <div className="text-sm text-gray-600">{e.st}</div>
-              </div>
-            </li>
-          ))}
-        </ul>
-      </Section>
-      
+    
       {/* CAPACITACIONES */}
       <Section id="capacitaciones" title="Cursos y Capacitación">
         <CoursesMini
@@ -240,41 +222,6 @@ export default function Home() {
         />
       </Section>
 
-
-
-
-      {/* CLIENTES Y ALIADOS */}
-      <Section id="clientes" title="Nuestros clientes y aliados">
-        <div className="flex flex-col items-center justify-center">
-          <Image
-            src="/clientes.png"
-            alt="Clientes y aliados ASOSERLID"
-            width={1600}
-            height={900}
-            className="w-full max-w-4xl h-auto rounded-xl shadow-lg transition-transform duration-500 hover:scale-[1.02]"
-          />
-          <p className="mt-6 text-center text-gray-600 text-lg max-w-2xl">
-            Contamos con la confianza de instituciones públicas y privadas del país,
-            que respaldan nuestro compromiso con la calidad y la excelencia en el servicio.
-          </p>
-        </div>
-      </Section>
-
-
-
-      {/* CERTIFICACIONES 
-      <Section id="certificaciones" title="Certificaciones">
-        <Gallery
-          images={[
-            { src: "/ISO.jpg", alt: "Certificación ISO" },
-            { src: "/inen.jpg", alt: "INEN" },
-            { src: "/somoseps.jpeg", alt: "Somos EPS" },
-            { src: "/soy.png", alt: "Soy Solidario" },
-          ]}
-        />
-      </Section> 
-      */}
-
       {/* CERTIFICACIONES */}
       <Section id="certificaciones" title="Certificaciones">
           <p className="text-gray-700 text-justify leading-relaxed mb-8">
@@ -301,17 +248,36 @@ export default function Home() {
               "
             >
               <div className="relative w-full h-32 sm:h-40">
-                <img
+                <Image
                   src={logo.src}
                   alt={logo.alt}
-                  className="object-contain w-full h-full"
+                  fill
+                  sizes="(max-width: 640px) 50vw, 25vw"
+                  className="object-contain"
                 />
               </div>
+
             </div>
           ))}
         </div>
       </Section>
 
+      {/* CLIENTES Y ALIADOS */}
+      <Section id="clientes" title="Nuestros clientes y aliados">
+        <div className="flex flex-col items-center justify-center">
+          <Image
+            src="/clientes.png"
+            alt="Clientes y aliados ASOSERLID"
+            width={1600}
+            height={900}
+            className="w-full max-w-4xl h-auto rounded-xl shadow-lg transition-transform duration-500 hover:scale-[1.02]"
+          />
+          <p className="mt-6 text-center text-gray-600 text-lg max-w-2xl">
+            Contamos con la confianza de instituciones públicas y privadas del país,
+            que respaldan nuestro compromiso con la calidad y la excelencia en el servicio.
+          </p>
+        </div>
+      </Section>
 
 
 
