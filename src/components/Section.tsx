@@ -15,10 +15,21 @@ export default function Section({
   className?: string; // 👈 nuevo
 }) {
   return (
-    <section id={id} className={clsx("py-16 scroll-mt-24", className)}>
+    <section id={id} className={clsx("scroll-mt-24 py-20", className)}>
       <div className="max-w-6xl mx-auto px-4">
-        {title && <h2 className="text-3xl font-bold mb-2">{title}</h2>}
-        {subtitle && <p className="text-lg text-gray-600 mb-6">{subtitle}</p>}
+        {(title || subtitle) && (
+          <div className="mb-10 max-w-3xl">
+            {title && (
+              <div className="flex items-center gap-4">
+                <span className="h-px w-12 bg-[#33C3C9]" />
+                <h2 className="text-3xl font-bold tracking-tight text-[#173C61] sm:text-4xl">
+                  {title}
+                </h2>
+              </div>
+            )}
+            {subtitle && <p className="mt-3 text-lg leading-relaxed text-slate-600">{subtitle}</p>}
+          </div>
+        )}
         {children}
       </div>
     </section>

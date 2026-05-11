@@ -1,4 +1,5 @@
 "use client";
+
 import { useState } from "react";
 import Image from "next/image";
 import CourseModal from "./CourseModal";
@@ -15,39 +16,35 @@ export default function CoursesMini({ items }: { items: Course[] }) {
 
   return (
     <>
-      <ul className="grid gap-6 sm:grid-cols-2">
-        {items.map((c, idx) => (
-          <li
-            key={idx}
-            onClick={() => setSelected(c)}
-            className="
-              cursor-pointer border rounded-2xl p-6 flex items-center gap-6
-              hover:shadow-xl hover:scale-[1.02] transition-all bg-white/50
-            "
-          >
-            {/* Imagen más grande */}
-            {c.img && (
-              <div className="relative w-40 h-40 flex-shrink-0 overflow-hidden rounded-2xl ring-1 ring-gray-200">
-                <Image
-                  src={c.img}
-                  alt={c.t}
-                  fill
-                  sizes="(max-width: 768px) 100vw, 50vw"
-                  className="object-cover"
-                />
-              </div>
-            )}
+      <ul className="grid gap-5 sm:grid-cols-2">
+        {items.map((c) => (
+          <li key={c.t}>
+            <button
+              type="button"
+              onClick={() => setSelected(c)}
+              className="group flex h-full w-full items-center gap-4 rounded-lg border border-slate-200 bg-white p-4 text-left shadow-sm transition hover:-translate-y-1 hover:border-[#33C3C9]/70 hover:shadow-lg focus:outline-none focus-visible:ring-2 focus-visible:ring-[#33C3C9]"
+            >
+              {c.img && (
+                <div className="relative h-24 w-24 flex-shrink-0 overflow-hidden rounded-md bg-slate-100 ring-1 ring-slate-200 sm:h-28 sm:w-28">
+                  <Image
+                    src={c.img}
+                    alt={c.t}
+                    fill
+                    sizes="112px"
+                    className="object-cover transition duration-300 group-hover:scale-105"
+                  />
+                </div>
+              )}
 
-            {/* Texto */}
-            <div className="flex-1">
-              <div className="font-semibold text-xl text-gray-900">{c.t}</div>
-              <div className="text-base text-gray-600 leading-snug">{c.st}</div>
-            </div>
+              <div className="min-w-0 flex-1">
+                <div className="text-base font-bold text-[#173C61] sm:text-lg">{c.t}</div>
+                <div className="mt-1 text-sm leading-relaxed text-slate-600">{c.st}</div>
+              </div>
+            </button>
           </li>
         ))}
       </ul>
 
-      {/* Modal */}
       {selected && (
         <CourseModal
           show={!!selected}
@@ -57,7 +54,6 @@ export default function CoursesMini({ items }: { items: Course[] }) {
           img={selected.img}
         />
       )}
-
     </>
   );
 }
