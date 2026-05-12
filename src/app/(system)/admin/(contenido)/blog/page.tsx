@@ -27,7 +27,7 @@ export default function BlogAdminPage() {
   const [selectedSlug, setSelectedSlug] = useState<string>("new");
   const [form, setForm] = useState<Post>(emptyPost);
   const [tagText, setTagText] = useState("");
-  const [login, setLogin] = useState({ username: "", password: "" });
+  const [login, setLogin] = useState({ email: "", password: "" });
   const [status, setStatus] = useState<string | null>(null);
   const [showHtml, setShowHtml] = useState(false);
 
@@ -80,7 +80,7 @@ export default function BlogAdminPage() {
       return;
     }
 
-    setLogin({ username: "", password: "" });
+    setLogin({ email: "", password: "" });
     await loadPosts();
   }
 
@@ -212,12 +212,13 @@ export default function BlogAdminPage() {
           <h1 className="text-2xl font-bold text-[#173C61]">Acceso de publicidad</h1>
           <p className="mt-2 text-sm text-slate-600">Ingresa para crear y editar publicaciones del blog.</p>
 
-          <Field label="Usuario" className="mt-6">
+          <Field label="Correo" className="mt-6">
             <input
               required
+              type="email"
               className={inputClass}
-              value={login.username}
-              onChange={(e) => setLogin({ ...login, username: e.target.value })}
+              value={login.email}
+              onChange={(e) => setLogin({ ...login, email: e.target.value })}
             />
           </Field>
 

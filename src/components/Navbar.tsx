@@ -93,6 +93,14 @@ export default function Navbar() {
           ))}
           <li>
             <Link
+              href="/admin"
+              className="rounded-md border border-[#173C61] px-4 py-2.5 font-semibold text-[#173C61] transition hover:border-[#218F93] hover:text-[#218F93]"
+            >
+              Iniciar sesion
+            </Link>
+          </li>
+          <li>
+            <Link
               href={{ pathname: "/", hash: "contacto" }}
               className="rounded-md bg-[#173C61] px-4 py-2.5 font-semibold text-white transition hover:bg-[#218F93]"
             >
@@ -133,6 +141,15 @@ export default function Navbar() {
               )}
             </li>
           ))}
+          <li className="pt-2">
+            <Link
+              href="/admin"
+              className="block rounded-md border border-[#173C61] px-3 py-2.5 text-center font-semibold text-[#173C61] hover:border-[#218F93] hover:text-[#218F93]"
+              onClick={() => setOpen(false)}
+            >
+              Iniciar sesion
+            </Link>
+          </li>
           <li className="pt-2">
             <Link
               href={{ pathname: "/", hash: "contacto" }}
