@@ -10,6 +10,7 @@ import type {
   ContractShift,
   ContractWorkplace,
   ServiceContract,
+  ServiceType,
   Worker,
   WorkGroup,
 } from "@/types/admin";
@@ -50,6 +51,7 @@ type ModalState =
 export default function ContractsShiftsPage() {
   const [contracts, setContracts] = useState<ServiceContract[]>([]);
   const [clients, setClients] = useState<SelectOption[]>([]);
+  const [serviceTypes, setServiceTypes] = useState<SelectOption[]>([]);
   const [groups, setGroups] = useState<SelectOption[]>([]);
   const [supervisors, setSupervisors] = useState<SelectOption[]>([]);
   const [workers, setWorkers] = useState<Worker[]>([]);
@@ -83,26 +85,35 @@ export default function ContractsShiftsPage() {
   }, [contracts, selectedContract]);
 
   async function loadData() {
-    const [contractsRes, clientsRes, groupsRes, workersRes, supervisorsRes] = await Promise.all([
+    const [contractsRes, clientsRes, serviceTypesRes, groupsRes, workersRes, supervisorsRes] = await Promise.all([
       fetch("/api/admin/contracts", { cache: "no-store" }),
       fetch("/api/admin/clients", { cache: "no-store" }),
+      fetch("/api/admin/service-types", { cache: "no-store" }),
       fetch("/api/admin/work-groups", { cache: "no-store" }),
       fetch("/api/admin/workers", { cache: "no-store" }),
       fetch("/api/admin/supervisors", { cache: "no-store" }),
     ]);
     const contractsData = await contractsRes.json().catch(() => ({}));
     const clientsData = await clientsRes.json().catch(() => ({}));
+    const serviceTypesData = await serviceTypesRes.json().catch(() => ({}));
     const groupsData = await groupsRes.json().catch(() => ({}));
     const workersData = await workersRes.json().catch(() => ({}));
     const supervisorsData = await supervisorsRes.json().catch(() => ({}));
 
     if (contractsRes.ok) setContracts((contractsData.items || []).map(normalizeContract));
     if (clientsRes.ok) setClients(((clientsData.items || []) as Client[]).map((client) => ({ value: client._id || "", label: client.name })));
+    if (serviceTypesRes.ok) {
+      setServiceTypes(
+        ((serviceTypesData.items || []) as ServiceType[])
+          .filter((item) => item.status === "active")
+          .map((item) => ({ value: item.name, label: item.name }))
+      );
+    }
     if (groupsRes.ok) setGroups(((groupsData.items || []) as WorkGroup[]).map((group) => ({ value: group._id || "", label: group.name })));
     if (workersRes.ok) setWorkers(workersData.items || []);
     if (supervisorsRes.ok) setSupervisors((supervisorsData.items || []).map((item: { id: string; name: string }) => ({ value: item.id, label: item.name })));
-    if (!contractsRes.ok || !clientsRes.ok || !groupsRes.ok || !workersRes.ok || !supervisorsRes.ok) {
-      setStatus(contractsData.error || clientsData.error || groupsData.error || workersData.error || supervisorsData.error || "No se pudo cargar contratos.");
+    if (!contractsRes.ok || !clientsRes.ok || !serviceTypesRes.ok || !groupsRes.ok || !workersRes.ok || !supervisorsRes.ok) {
+      setStatus(contractsData.error || clientsData.error || serviceTypesData.error || groupsData.error || workersData.error || supervisorsData.error || "No se pudo cargar contratos.");
     }
   }
 
@@ -292,6 +303,7 @@ export default function ContractsShiftsPage() {
           <ContractGeneralForm
             form={form}
             clients={clients}
+            serviceTypes={serviceTypes}
             groups={groups}
             onChange={setForm}
             onSubmit={saveContract}
@@ -358,6 +370,7 @@ export default function ContractsShiftsPage() {
 function ContractGeneralForm({
   form,
   clients,
+  serviceTypes,
   groups,
   onChange,
   onSubmit,
@@ -365,6 +378,7 @@ function ContractGeneralForm({
 }: {
   form: ServiceContract;
   clients: SelectOption[];
+  serviceTypes: SelectOption[];
   groups: SelectOption[];
   onChange: (contract: ServiceContract) => void;
   onSubmit: (e: FormEvent) => void;
@@ -378,7 +392,7 @@ function ContractGeneralForm({
       </div>
       <div className="grid gap-4 sm:grid-cols-2">
         <SearchableSelect label="Cliente" value={form.clientId || ""} options={clients} placeholder="Buscar cliente..." onChange={(option) => onChange({ ...form, clientId: option?.value || "", clientName: option?.label || "" })} />
-        <Field label="Tipo de servicio"><input required className={inputClass} value={form.serviceType} onChange={(e) => onChange({ ...form, serviceType: e.target.value })} /></Field>
+        <SearchableSelect label="Tipo de servicio" value={form.serviceType || ""} options={serviceTypes} placeholder="Buscar servicio..." onChange={(option) => onChange({ ...form, serviceType: option?.label || "" })} />
         <Field label="Fecha inicio"><input required type="date" className={inputClass} value={form.startDate} onChange={(e) => onChange({ ...form, startDate: e.target.value })} /></Field>
         <Field label="Fecha fin"><input type="date" className={inputClass} value={form.endDate || ""} onChange={(e) => onChange({ ...form, endDate: e.target.value })} /></Field>
         <SearchableSelect label="Grupo de trabajo" value={form.workGroupId || ""} options={groups} placeholder="Buscar grupo..." onChange={(option) => onChange({ ...form, workGroupId: option?.value || "", workGroupName: option?.label || "" })} />

@@ -1,4 +1,5 @@
-import bcrypt from "bcryptjs";
+import { randomBytes, scrypt as scryptCallback, timingSafeEqual } from "node:crypto";
+import { promisify } from "node:util";
 import { MongoClient, ServerApiVersion } from "mongodb";
 import { readFileSync } from "node:fs";
 import { resolve } from "node:path";
@@ -9,6 +10,7 @@ const uri = process.env.MONGODB_URI;
 const dbName = process.env.MONGODB_DB || "asoserlid_v2";
 const email = (process.env.ADMIN_EMAIL || "admin@asoserlid.com").trim().toLowerCase();
 const password = process.env.ADMIN_PASSWORD || process.env.BLOG_ADMIN_PASSWORD;
+const scrypt = promisify(scryptCallback);
 
 if (!uri) {
   console.error("Falta MONGODB_URI en .env.local");
@@ -40,7 +42,7 @@ try {
     await db.collection("users").insertOne({
       name: "Administrador ASOSERLID",
       email,
-      passwordHash: await bcrypt.hash(password, 12),
+      passwordHash: await hashPassword(password),
       roles: ["administrator"],
       moduleAccess: [
         "roles",
@@ -75,7 +77,7 @@ try {
     });
     console.log(`Administrador creado: ${email}`);
   } else {
-    const valid = await bcrypt.compare(password, existing.passwordHash || "");
+    const valid = await verifyPassword(password, existing.passwordHash || "");
     console.log(`Administrador encontrado: ${email}`);
     console.log(`Contrasena del .env.local coincide: ${valid ? "si" : "no"}`);
   }
@@ -84,6 +86,24 @@ try {
   process.exit(1);
 } finally {
   await client.close();
+}
+
+async function hashPassword(value) {
+  const salt = randomBytes(16).toString("base64url");
+  const hash = await scrypt(value, salt, 64, { N: 16384, r: 8, p: 1 });
+  return `scrypt$16384$8$1$${salt}$${Buffer.from(hash).toString("base64url")}`;
+}
+
+async function verifyPassword(value, storedHash) {
+  if (!storedHash.startsWith("scrypt$")) {
+    console.log("Hash legacy detectado. El sistema web lo migrara a scrypt en el proximo login correcto.");
+    return false;
+  }
+
+  const [, n, r, p, salt, encodedHash] = storedHash.split("$");
+  const expected = Buffer.from(encodedHash, "base64url");
+  const actual = await scrypt(value, salt, expected.length, { N: Number(n), r: Number(r), p: Number(p) });
+  return expected.length === actual.length && timingSafeEqual(expected, actual);
 }
 
 function loadEnvLocal() {

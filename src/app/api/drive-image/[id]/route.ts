@@ -9,17 +9,19 @@ type Context = {
 export async function GET(_req: Request, { params }: Context) {
   try {
     const { id } = await params;
-    const drive = getDriveClient();
+    const drive = await getDriveClient();
 
     const metadata = await drive.files.get({
       fileId: id,
       fields: "mimeType,name",
+      supportsAllDrives: true,
     });
 
     const file = await drive.files.get(
       {
         fileId: id,
         alt: "media",
+        supportsAllDrives: true,
       },
       { responseType: "stream" }
     );

@@ -12,6 +12,7 @@ export default function ContactForm({ defaultService }: { defaultService?: strin
     telefono: "",
     servicio: defaultService ?? "General",
     mensaje: "",
+    aceptaDatos: false,
   });
 
   useEffect(() => {
@@ -42,6 +43,7 @@ export default function ContactForm({ defaultService }: { defaultService?: strin
         telefono: "",
         servicio: defaultService ?? "General",
         mensaje: "",
+        aceptaDatos: false,
       });
       return;
     }
@@ -116,6 +118,19 @@ export default function ContactForm({ defaultService }: { defaultService?: strin
           value={form.mensaje}
           onChange={(e) => setForm({ ...form, mensaje: e.target.value })}
         />
+      </label>
+
+      <label className="mt-4 flex items-start gap-3 rounded-md border border-slate-200 bg-slate-50 px-4 py-3 text-sm text-slate-700">
+        <input
+          required
+          type="checkbox"
+          className="mt-1"
+          checked={form.aceptaDatos}
+          onChange={(e) => setForm({ ...form, aceptaDatos: e.target.checked })}
+        />
+        <span>
+          Acepto el tratamiento de mis datos personales conforme a la politica de privacidad y proteccion de datos personales.
+        </span>
       </label>
 
       <button

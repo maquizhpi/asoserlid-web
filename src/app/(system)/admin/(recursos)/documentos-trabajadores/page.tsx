@@ -24,11 +24,13 @@ export default function WorkerDocumentsPage() {
   const [form, setForm] = useState<WorkerDocument>(emptyDocument);
   const [file, setFile] = useState<File | null>(null);
   const [status, setStatus] = useState<string | null>(null);
+  const [driveStatus, setDriveStatus] = useState<{ oauthClientConfigured: boolean; refreshTokenConfigured: boolean; folderConfigured: boolean } | null>(null);
 
   const selected = useMemo(() => documents.find((item) => item._id === selectedId), [documents, selectedId]);
 
   useEffect(() => {
     loadData();
+    loadDriveStatus();
   }, []);
 
   useEffect(() => {
@@ -51,6 +53,12 @@ export default function WorkerDocumentsPage() {
     if (!documentsRes.ok || !workersRes.ok) setStatus(documentsData.error || workersData.error || "No se pudo cargar documentos.");
   }
 
+  async function loadDriveStatus() {
+    const res = await fetch("/api/admin/google-drive/status", { cache: "no-store" });
+    const data = await res.json().catch(() => ({}));
+    if (res.ok) setDriveStatus(data);
+  }
+
   async function saveDocument(e: FormEvent) {
     e.preventDefault();
     setStatus("Guardando documento...");
@@ -59,8 +67,8 @@ export default function WorkerDocumentsPage() {
     if (file) {
       const uploadForm = new FormData();
       uploadForm.append("file", file);
-      uploadForm.append("folder", "asoserlid/trabajadores/documentos");
-      const uploadRes = await fetch("/api/admin/cloudinary-upload", { method: "POST", body: uploadForm });
+      uploadForm.append("folderName", "documentos-trabajadores");
+      const uploadRes = await fetch("/api/admin/document-upload", { method: "POST", body: uploadForm });
       const uploadData = await uploadRes.json().catch(() => ({}));
 
       if (!uploadRes.ok) {
@@ -108,6 +116,27 @@ export default function WorkerDocumentsPage() {
   return (
     <SystemModulePage moduleKey="worker-documents">
       {status && <p className="mb-5 rounded-md border border-slate-200 bg-white px-4 py-3 text-sm text-slate-700">{status}</p>}
+
+      <section className="mb-5 rounded-lg border border-slate-200 bg-white p-4 shadow-sm">
+        <div className="flex flex-col justify-between gap-3 sm:flex-row sm:items-center">
+          <div>
+            <h2 className="font-bold text-[#173C61]">Google Drive documental</h2>
+            <p className="mt-1 text-sm text-slate-600">
+              {driveStatus?.refreshTokenConfigured
+                ? "OAuth autorizado. Los documentos se subiran usando la cuenta de ASOSERLID."
+                : "Autoriza Google Drive para subir documentos con la cuota de asoserlid@gmail.com."}
+            </p>
+          </div>
+          <a href="/api/admin/google-drive/oauth/start" className="rounded-md bg-[#173C61] px-4 py-2 text-sm font-semibold text-white hover:bg-[#218F93]">
+            {driveStatus?.refreshTokenConfigured ? "Reautorizar Drive" : "Autorizar Drive"}
+          </a>
+        </div>
+        {driveStatus && (!driveStatus.oauthClientConfigured || !driveStatus.folderConfigured) && (
+          <p className="mt-3 rounded-md bg-amber-50 px-4 py-3 text-sm font-semibold text-amber-800">
+            Falta configurar cliente OAuth o carpeta de Drive en variables de entorno.
+          </p>
+        )}
+      </section>
 
       <section className="grid gap-6 lg:grid-cols-[0.75fr_1.25fr]">
         <aside className="rounded-lg border border-slate-200 bg-white p-4 shadow-sm">
@@ -158,7 +187,7 @@ export default function WorkerDocumentsPage() {
             </Field>
           </div>
 
-          {form.fileUrl && <a href={form.fileUrl} target="_blank" className="mt-4 inline-block text-sm font-semibold text-[#173C61] hover:text-[#218F93]">Ver documento cargado</a>}
+          {form.fileUrl && <DocumentPreview url={form.fileUrl} />}
 
           <label className="mt-4 grid gap-2 text-sm font-semibold text-slate-700">
             Observaciones
@@ -180,4 +209,23 @@ const inputClass =
 
 function Field({ label, children }: { label: string; children: React.ReactNode }) {
   return <label className="grid gap-2 text-sm font-semibold text-slate-700">{label}{children}</label>;
+}
+
+function DocumentPreview({ url }: { url: string }) {
+  const isPdf = url.toLowerCase().includes(".pdf") || url.includes("/api/drive-file/");
+
+  return (
+    <div className="mt-5 rounded-lg border border-slate-200 bg-slate-50 p-3">
+      <div className="mb-2 flex items-center justify-between gap-3">
+        <p className="text-sm font-bold text-[#173C61]">Documento cargado</p>
+        <a href={url} target="_blank" className="text-sm font-semibold text-[#218F93] hover:text-[#173C61]">Abrir archivo</a>
+      </div>
+      {isPdf ? (
+        <iframe src={url} title="Documento cargado" className="h-[520px] w-full rounded-md border border-slate-200 bg-white" />
+      ) : (
+        // eslint-disable-next-line @next/next/no-img-element
+        <img src={url} alt="Documento cargado" className="max-h-[520px] w-full rounded-md border border-slate-200 bg-white object-contain" />
+      )}
+    </div>
+  );
 }

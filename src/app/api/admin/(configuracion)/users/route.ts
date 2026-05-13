@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { hasModuleAccess } from "@/lib/adminAuth";
+import { auditSummary, recordAuditLog } from "@/lib/auditStore";
 import { createUser, getUsers, getUserStoreErrorMessage } from "@/lib/userStore";
 
 export async function GET() {
@@ -22,6 +23,14 @@ export async function POST(req: NextRequest) {
 
   try {
     const user = await createUser(await req.json());
+    await recordAuditLog({
+      action: "create",
+      moduleKey: "users",
+      collection: "users",
+      recordId: user._id,
+      recordLabel: user.email,
+      summary: auditSummary("create", `usuario ${user.email}`),
+    });
     return NextResponse.json({ ok: true, user }, { status: 201 });
   } catch (error) {
     return NextResponse.json({ ok: false, error: getUserStoreErrorMessage(error) }, { status: 400 });

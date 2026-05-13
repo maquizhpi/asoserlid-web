@@ -8,8 +8,8 @@ type AdminSession = {
 
 const protectedRoutes: Record<string, string[]> = {
   "/admin/configuraciones": ["roles", "users"],
-  "/admin/catalogos": ["roles", "users"],
-  "/admin/tipos-servicios": ["roles", "users"],
+  "/admin/catalogos": ["catalogs"],
+  "/admin/tipos-servicios": ["service-types"],
   "/admin/roles": ["roles"],
   "/admin/usuarios": ["users"],
   "/admin/trabajadores": ["workers"],
@@ -33,7 +33,11 @@ const protectedRoutes: Record<string, string[]> = {
   "/admin/procesos-contratacion": ["hiring-processes"],
   "/admin/calendario-procesos": ["process-calendar"],
   "/admin/notificaciones": ["notifications"],
-  "/admin/blog": ["roles", "users"],
+  "/admin/blog": ["blog"],
+  "/admin/auditorias": ["audits"],
+  "/admin/galeria": ["gallery"],
+  "/admin/certificaciones": ["certifications"],
+  "/admin/respaldos": ["backups"],
 };
 
 export async function proxy(req: NextRequest) {
@@ -110,7 +114,9 @@ async function signPayload(payload: string) {
 }
 
 function getSessionSecret() {
-  return process.env.ADMIN_SESSION_SECRET || process.env.ADMIN_PASSWORD || "asoserlid-local-admin";
+  const secret = process.env.AUTH_SECRET || process.env.ADMIN_SESSION_SECRET;
+  if (!secret || secret.length < 32) return "invalid-secret";
+  return secret;
 }
 
 function base64UrlToBase64(value: string) {

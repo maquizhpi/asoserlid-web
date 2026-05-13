@@ -1,17 +1,21 @@
 import { NextResponse } from "next/server";
 import { adminModules } from "@/lib/adminModules";
-import { isAdminAuthenticated } from "@/lib/adminAuth";
+import { getCurrentAdminUser } from "@/lib/adminAuth";
 import { getDb } from "@/lib/mongodb";
 
 export async function GET() {
-  if (!(await isAdminAuthenticated())) {
+  const user = await getCurrentAdminUser();
+  if (!user) {
     return NextResponse.json({ ok: false, error: "No autorizado." }, { status: 401 });
   }
 
   try {
     const db = await getDb();
+    const visibleModules = user.roles.includes("administrator")
+      ? adminModules
+      : adminModules.filter((module) => user.moduleAccess.includes(module.key));
     const modules = await Promise.all(
-      adminModules.map(async (module) => ({
+      visibleModules.map(async (module) => ({
         key: module.key,
         title: module.title,
         href: module.href,

@@ -1,5 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import nodemailer from "nodemailer";
+import { assertContactEnv } from "@/lib/env";
+import { checkRateLimit, getClientIp, rateLimitHeaders } from "@/lib/rateLimit";
 
 type ContactPayload = {
   nombre?: string;
@@ -7,10 +9,20 @@ type ContactPayload = {
   telefono?: string;
   servicio?: string;
   mensaje?: string;
+  aceptaDatos?: boolean;
 };
 
 export async function POST(req: NextRequest) {
   try {
+    const ip = getClientIp(req);
+    const limited = checkRateLimit(`contacto:${ip}`, { limit: 8, windowMs: 10 * 60 * 1000 });
+    if (!limited.allowed) {
+      return NextResponse.json(
+        { ok: false, error: "Demasiados mensajes. Intenta nuevamente en unos minutos." },
+        { status: 429, headers: rateLimitHeaders(limited) }
+      );
+    }
+
     const body = (await req.json()) as ContactPayload;
 
     const nombre = body.nombre?.trim();
@@ -18,6 +30,7 @@ export async function POST(req: NextRequest) {
     const telefono = body.telefono?.trim();
     const servicio = body.servicio?.trim();
     const mensaje = body.mensaje?.trim();
+    const aceptaDatos = body.aceptaDatos === true;
 
     if (!nombre || !email || !telefono || !servicio || !mensaje) {
       return NextResponse.json(
@@ -26,22 +39,23 @@ export async function POST(req: NextRequest) {
       );
     }
 
-    const smtpHost = process.env.SMTP_HOST;
-    const smtpPort = process.env.SMTP_PORT;
-    const smtpUser = process.env.SMTP_USER;
-    const smtpPass = process.env.SMTP_PASS;
-    const receiver = process.env.CONTACT_RECEIVER;
-
-    if (!smtpHost || !smtpPort || !smtpUser || !smtpPass || !receiver) {
+    if (!aceptaDatos) {
       return NextResponse.json(
-        { ok: false, error: "Faltan variables de entorno para enviar el correo." },
-        { status: 500 }
+        { ok: false, error: "Debes aceptar el tratamiento de datos personales." },
+        { status: 400 }
       );
     }
 
+    const env = assertContactEnv();
+    const smtpHost = env.SMTP_HOST!;
+    const smtpPort = env.SMTP_PORT!;
+    const smtpUser = env.SMTP_USER!;
+    const smtpPass = env.SMTP_PASS!;
+    const receiver = env.CONTACT_RECEIVER!;
+
     const transporter = nodemailer.createTransport({
       host: smtpHost,
-      port: Number(smtpPort),
+      port: smtpPort,
       secure: process.env.SMTP_SECURE === "true",
       requireTLS: true,
       auth: {
@@ -62,6 +76,7 @@ export async function POST(req: NextRequest) {
         `Correo del cliente: ${email}`,
         `Telefono o WhatsApp: ${telefono}`,
         `Servicio requerido: ${servicio}`,
+        "Acepta tratamiento de datos: Si",
         "",
         "Mensaje:",
         mensaje,
@@ -73,6 +88,7 @@ export async function POST(req: NextRequest) {
           <p><strong>Correo del cliente:</strong> ${escapeHtml(email)}</p>
           <p><strong>Telefono o WhatsApp:</strong> ${escapeHtml(telefono)}</p>
           <p><strong>Servicio requerido:</strong> ${escapeHtml(servicio)}</p>
+          <p><strong>Acepta tratamiento de datos:</strong> Si</p>
           <p><strong>Mensaje:</strong></p>
           <p style="white-space: pre-wrap;">${escapeHtml(mensaje)}</p>
         </div>

@@ -4,7 +4,7 @@ import { FormEvent, useEffect, useMemo, useState } from "react";
 import ImportCsvModal from "@/components/system/ImportCsvModal";
 import SearchableSelect, { type SelectOption } from "@/components/system/SearchableSelect";
 import SystemModulePage from "@/components/system/SystemModulePage";
-import type { Client, ServiceContract, Worker, WorkGroup } from "@/types/admin";
+import type { Client, EmployeePosition, ServiceContract, Worker, WorkGroup } from "@/types/admin";
 
 const emptyWorker: Worker = {
   documentId: "",
@@ -20,6 +20,7 @@ const emptyWorker: Worker = {
   assignedContractId: "",
   assignedContract: "",
   assignedArea: "",
+  assignedSchedule: "",
   supervisor: "",
   workGroupId: "",
   workGroupName: "",
@@ -33,6 +34,7 @@ export default function WorkersPage() {
   const [groups, setGroups] = useState<SelectOption[]>([]);
   const [clients, setClients] = useState<SelectOption[]>([]);
   const [contracts, setContracts] = useState<SelectOption[]>([]);
+  const [positions, setPositions] = useState<SelectOption[]>([]);
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const [workerMode, setWorkerMode] = useState<PanelMode>("list");
   const [form, setForm] = useState<Worker>(emptyWorker);
@@ -88,16 +90,18 @@ export default function WorkersPage() {
   }, [selectedWorker, workerMode, workers]);
 
   async function loadWorkers() {
-    const [workersRes, groupsRes, clientsRes, contractsRes] = await Promise.all([
+    const [workersRes, groupsRes, clientsRes, contractsRes, positionsRes] = await Promise.all([
       fetch("/api/admin/workers", { cache: "no-store" }),
       fetch("/api/admin/work-groups", { cache: "no-store" }),
       fetch("/api/admin/clients", { cache: "no-store" }),
       fetch("/api/admin/contracts", { cache: "no-store" }),
+      fetch("/api/admin/employee-positions", { cache: "no-store" }),
     ]);
     const workersData = await workersRes.json().catch(() => ({}));
     const groupsData = await groupsRes.json().catch(() => ({}));
     const clientsData = await clientsRes.json().catch(() => ({}));
     const contractsData = await contractsRes.json().catch(() => ({}));
+    const positionsData = await positionsRes.json().catch(() => ({}));
 
     if (workersRes.ok) setWorkers(workersData.items || []);
     if (groupsRes.ok) {
@@ -116,8 +120,15 @@ export default function WorkersPage() {
         }))
       );
     }
-    if (!workersRes.ok || !groupsRes.ok || !clientsRes.ok || !contractsRes.ok) {
-      setStatus(workersData.error || groupsData.error || clientsData.error || contractsData.error || "No se pudo cargar trabajadores.");
+    if (positionsRes.ok) {
+      setPositions(
+        ((positionsData.items || []) as EmployeePosition[])
+          .filter((item) => item.status === "active")
+          .map((item) => ({ value: item.name, label: item.name }))
+      );
+    }
+    if (!workersRes.ok || !groupsRes.ok || !clientsRes.ok || !contractsRes.ok || !positionsRes.ok) {
+      setStatus(workersData.error || groupsData.error || clientsData.error || contractsData.error || positionsData.error || "No se pudo cargar trabajadores.");
     }
   }
 
@@ -277,6 +288,7 @@ export default function WorkersPage() {
             groups={groups}
             clients={clients}
             contracts={contracts}
+            positions={positions}
             selectedGroup={selectedGroup}
             consulting={consulting}
             onChange={setForm}
@@ -321,6 +333,7 @@ function WorkerDetail({ worker, onEdit, onNew }: { worker?: Worker; onEdit: () =
         <Info label="Cliente" value={worker.assignedClient || "-"} />
         <Info label="Contrato / turno" value={worker.assignedContract || "-"} />
         <Info label="Area / lugar" value={worker.assignedArea || "-"} />
+        <Info label="Horario" value={worker.assignedSchedule || "-"} />
         <Info label="Documentos / validacion" value={worker.documents || "-"} />
       </dl>
     </section>
@@ -332,6 +345,7 @@ function WorkerForm({
   groups,
   clients,
   contracts,
+  positions,
   selectedGroup,
   consulting,
   onChange,
@@ -344,6 +358,7 @@ function WorkerForm({
   groups: SelectOption[];
   clients: SelectOption[];
   contracts: SelectOption[];
+  positions: SelectOption[];
   selectedGroup?: WorkGroup;
   consulting: boolean;
   onChange: (worker: Worker) => void;
@@ -375,9 +390,13 @@ function WorkerForm({
           </div>
         </label>
 
-        <Field label="Cargo">
-          <input required className={inputClass} value={form.position} onChange={(e) => onChange({ ...form, position: e.target.value })} />
-        </Field>
+        <SearchableSelect
+          label="Cargo"
+          value={form.position}
+          options={positions}
+          placeholder="Buscar cargo..."
+          onChange={(option) => onChange({ ...form, position: option?.label || "" })}
+        />
         <Field label="Nombres">
           <input required className={inputClass} value={form.firstName} onChange={(e) => onChange({ ...form, firstName: e.target.value })} />
         </Field>
@@ -422,6 +441,9 @@ function WorkerForm({
         />
         <Field label="Area / lugar de trabajo">
           <input className={inputClass} value={form.assignedArea || ""} onChange={(e) => onChange({ ...form, assignedArea: e.target.value })} />
+        </Field>
+        <Field label="Horario">
+          <input className={inputClass} value={form.assignedSchedule || ""} onChange={(e) => onChange({ ...form, assignedSchedule: e.target.value })} />
         </Field>
       </div>
 

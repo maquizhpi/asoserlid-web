@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import Image from "next/image";
 import Section from "@/components/Section";
 import ServiceCard from "@/components/ServiceCard";
@@ -8,6 +8,7 @@ import Carousel from "@/components/Carousel";
 import ServiceModal from "@/components/ServiceModal";
 import ContactForm from "@/components/ContactForm";
 import CoursesMini from "@/components/CoursesMini";
+import type { CertificationItem, GalleryImage, ServiceType } from "@/types/admin";
 
 const servicios = [
   {
@@ -153,9 +154,50 @@ const indicadores = [
 export default function Home() {
   const [selected, setSelected] = useState<number | null>(null);
   const [contactService, setContactService] = useState<string>("General");
+  const [serviceItems, setServiceItems] = useState<typeof servicios>([]);
+  const [galleryImages, setGalleryImages] = useState<GalleryImage[]>([]);
+  const [certificationItems, setCertificationItems] = useState<CertificationItem[]>([]);
 
   const open = selected !== null;
-  const current = selected !== null ? servicios[selected] : null;
+  const visibleServices = serviceItems.length ? serviceItems : servicios;
+  const current = selected !== null ? visibleServices[selected] : null;
+  const visibleCertifications = certificationItems.length
+    ? certificationItems.map((item) => ({ src: item.fileUrl, alt: item.title }))
+    : [
+        { src: "/certs/iso9001.png", alt: "Certificación ISO 9001: Gestión de Calidad" },
+        { src: "/certs/inen.png", alt: "Certificación INEN: Calidad y Seguridad Industrial" },
+        { src: "/certs/eps.png", alt: "Certificación Somos EPS: Economía Popular y Solidaria" },
+        { src: "/certs/soy-responsable.png", alt: "Certificación Soy Responsable: Compromiso Ambiental" },
+      ];
+  const visibleGallery = galleryImages.length
+    ? galleryImages.map((item) => ({ src: item.imageUrl, alt: item.alt || item.title }))
+    : [
+        { src: "/work1.jpg", alt: "Trabajo de limpieza profesional 1" },
+        { src: "/work2.jpg", alt: "Trabajo de limpieza profesional 2" },
+        { src: "/work3.jpg", alt: "Trabajo de limpieza profesional 3" },
+        { src: "/work4.jpg", alt: "Trabajo de limpieza profesional 4" },
+        { src: "/work5.jpg", alt: "Trabajo de limpieza profesional 5" },
+        { src: "/work6.jpg", alt: "Trabajo de limpieza profesional 6" },
+        { src: "/work7.jpg", alt: "Trabajo de limpieza profesional 7" },
+      ];
+
+  useEffect(() => {
+    fetch("/api/content/services")
+      .then((res) => res.json())
+      .then((data) => {
+        const items = ((data.items || []) as ServiceType[]).map((item) => ({
+          t: item.name,
+          d: item.detail,
+          long: item.detail,
+          bullets: item.activities.split(/\r?\n|,/).map((activity) => activity.trim()).filter(Boolean),
+          img: item.imageUrl || "/work3.jpg",
+        }));
+        setServiceItems(items);
+      })
+      .catch(() => undefined);
+    fetch("/api/content/gallery").then((res) => res.json()).then((data) => setGalleryImages(data.items || [])).catch(() => undefined);
+    fetch("/api/content/certifications").then((res) => res.json()).then((data) => setCertificationItems(data.items || [])).catch(() => undefined);
+  }, []);
 
   return (
     <main>
@@ -318,7 +360,7 @@ export default function Home() {
         className="bg-slate-50"
       >
         <ul className="grid grid-cols-1 gap-6 sm:grid-cols-2 lg:grid-cols-3">
-          {servicios.map((s, i) => (
+          {visibleServices.map((s, i) => (
             <li key={s.t} className="list-none">
               <ServiceCard
                 title={s.t}
@@ -350,12 +392,7 @@ export default function Home() {
           En <strong>ASOSERLID</strong>, trabajamos bajo altos estándares de calidad, seguridad y responsabilidad social. Estas acreditaciones fortalecen nuestra credibilidad ante instituciones públicas, privadas y de salud, reafirmando que nuestro trabajo se desarrolla con ética, eficiencia y sostenibilidad ambiental.
         </p>
         <div className="grid items-center gap-5 grid-cols-2 sm:grid-cols-4">
-          {[
-            { src: "/certs/iso9001.png", alt: "Certificación ISO 9001: Gestión de Calidad" },
-            { src: "/certs/inen.png", alt: "Certificación INEN: Calidad y Seguridad Industrial" },
-            { src: "/certs/eps.png", alt: "Certificación Somos EPS: Economía Popular y Solidaria" },
-            { src: "/certs/soy-responsable.png", alt: "Certificación Soy Responsable: Compromiso Ambiental" },
-          ].map((logo) => (
+          {visibleCertifications.map((logo) => (
             <div key={logo.alt} className="flex min-h-44 items-center justify-center rounded-lg border border-slate-200 bg-white p-6 shadow-sm">
               <div className="relative h-32 w-full">
                 <Image
@@ -393,15 +430,7 @@ export default function Home() {
 
       <Section id="galeria" title="Galería" subtitle="Evidencia de nuestro trabajo en campo." className="bg-slate-50">
         <Carousel
-          images={[
-            { src: "/work1.jpg", alt: "Trabajo de limpieza profesional 1" },
-            { src: "/work2.jpg", alt: "Trabajo de limpieza profesional 2" },
-            { src: "/work3.jpg", alt: "Trabajo de limpieza profesional 3" },
-            { src: "/work4.jpg", alt: "Trabajo de limpieza profesional 4" },
-            { src: "/work5.jpg", alt: "Trabajo de limpieza profesional 5" },
-            { src: "/work6.jpg", alt: "Trabajo de limpieza profesional 6" },
-            { src: "/work7.jpg", alt: "Trabajo de limpieza profesional 7" },
-          ]}
+          images={visibleGallery}
           aspect="aspect-[16/9]"
           rounded="rounded-lg"
         />
@@ -419,6 +448,13 @@ export default function Home() {
             <div className="mt-8 rounded-md border border-white/20 bg-white/10 p-4 text-sm text-white/85">
               Responderemos tu solicitud para coordinar alcance, frecuencia, horarios y requerimientos técnicos del servicio.
             </div>
+            <a
+              href="https://wa.me/593998894744?text=Hola%20ASOSERLID%2C%20quiero%20informacion%20sobre%20sus%20servicios%20de%20limpieza."
+              target="_blank"
+              className="mt-4 inline-flex w-full items-center justify-center rounded-md bg-[#25D366] px-5 py-3 font-bold text-slate-950 hover:bg-white"
+            >
+              Contactar por WhatsApp
+            </a>
           </div>
           <ContactForm defaultService={contactService} />
         </div>

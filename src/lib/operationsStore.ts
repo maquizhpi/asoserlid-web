@@ -32,9 +32,30 @@ export const workerSchema = z.object({
   assignedContractId: optionalText,
   assignedContract: optionalText,
   assignedArea: optionalText,
+  assignedSchedule: optionalText,
   supervisor: optionalText,
   workGroupId: optionalText,
   workGroupName: optionalText,
+}).strip();
+
+export const employeePositionSchema = z.object({
+  code: text("El codigo del cargo es obligatorio."),
+  name: text("El nombre del cargo es obligatorio."),
+  description: optionalText,
+  status: z.enum(["active", "inactive"]).default("active"),
+}).strip();
+
+export const serviceTypeSchema = z.object({
+  code: text("El codigo de servicio es obligatorio."),
+  name: text("El nombre del servicio es obligatorio."),
+  detail: text("El detalle del servicio es obligatorio."),
+  activities: text("Las actividades del servicio son obligatorias."),
+  imageUrl: optionalText,
+  imagePublicId: optionalText,
+  regularPrice: optionalNumber,
+  discountPercent: optionalNumber,
+  offerPrice: optionalNumber,
+  status: z.enum(["active", "inactive"]).default("active"),
 }).strip();
 
 export const workGroupSchema = z.object({
@@ -151,12 +172,14 @@ export const workerIntakeSchema = z.object({
   documentId: text("La cedula es obligatoria."),
   fullName: text("El nombre completo es obligatorio."),
   phone: text("El contacto es obligatorio."),
-  email: z.string().email("El correo no es valido.").optional().or(z.literal("")),
+  email: z.string().email("El correo no es valido.").trim(),
   position: text("El cargo es obligatorio."),
-  address: optionalText,
+  address: text("La direccion es obligatoria."),
   resumeUrl: optionalText,
   resumePublicId: optionalText,
   status: z.enum(["received", "reviewing", "accepted", "rejected"]).default("received"),
+  approvedWorkerId: optionalText,
+  approvedAt: optionalText,
 }).strip();
 
 export const workerDocumentSchema = z.object({
@@ -232,13 +255,61 @@ export const supplyMovementSchema = z.object({
 }).strip();
 
 export const hiringProcessSchema = z.object({
-  processNumber: text("El numero de proceso es obligatorio."),
-  title: text("El nombre del proceso es obligatorio."),
+  numeroProceso: text("El numero de proceso es obligatorio."),
+  entidadCliente: text("La entidad o cliente es obligatoria."),
+  objetoProceso: text("El objeto del proceso es obligatorio."),
+  tipoCompra: optionalText,
+  presupuestoReferencialSinIva: optionalNumber,
+  tipoContratacion: optionalText,
+  formaPago: optionalText,
+  tipoAdjudicacion: optionalText,
+  plazoEntregaDias: optionalNumber,
+  vigenciaOfertaDias: optionalNumber,
+  funcionarioEncargado: optionalText,
+  areaResponsable: z.string().trim().default("Sin area"),
+  estadoProceso: z.enum(["Planificado", "En seguimiento", "Por vencer", "Vencido", "Adjudicado", "Desierto", "Cancelado", "Finalizado"]).default("Planificado"),
+  descripcion: optionalText,
+  notas: optionalText,
+  fechaInicio: z.string().min(10, "La fecha de inicio es obligatoria.").trim(),
+  fechaVencimiento: z.string().min(10, "La fecha de vencimiento es obligatoria.").trim(),
+  cronograma: z.array(z.object({
+    id: optionalText,
+    tipoFecha: text("El tipo de fecha es obligatorio."),
+    fechaHora: z.string().min(10, "La fecha y hora del cronograma es obligatoria.").trim(),
+    descripcion: optionalText,
+    estado: z.enum(["Pendiente", "Hoy", "Proxima", "Vencida", "Cumplida"]).default("Pendiente"),
+    observacion: optionalText,
+  }).strip()).default([]),
+  agendaOperacional: z.array(z.object({
+    id: optionalText,
+    titulo: text("El titulo de la actividad es obligatorio."),
+    descripcion: optionalText,
+    fechaHoraInicio: z.string().min(10, "La fecha de inicio de la actividad es obligatoria.").trim(),
+    fechaHoraFin: optionalText,
+    responsable: optionalText,
+    prioridad: z.enum(["Alta", "Media", "Baja"]).default("Media"),
+    estado: z.enum(["Pendiente", "En proceso", "Cumplido", "Vencido", "Reprogramado"]).default("Pendiente"),
+    origen: z.enum(["Automatico", "Manual"]).default("Manual"),
+    procesoRelacionado: optionalText,
+    observaciones: optionalText,
+    fechaCumplimiento: optionalText,
+  }).strip()).default([]),
+  archivos: z.array(z.object({
+    id: optionalText,
+    nombre: text("El nombre del archivo es obligatorio."),
+    url: optionalText,
+    tipo: optionalText,
+    observacion: optionalText,
+    createdAt: optionalText,
+  }).strip()).default([]),
+  processNumber: optionalText,
+  title: optionalText,
   clientName: optionalText,
-  startDate: z.string().min(10, "La fecha de inicio es obligatoria.").trim(),
-  dueDate: z.string().min(10, "La fecha de vencimiento es obligatoria.").trim(),
+  area: optionalText,
+  startDate: optionalText,
+  dueDate: optionalText,
   status: z.enum(["planned", "in_progress", "paused", "completed", "cancelled"]).default("planned"),
-  timeline: text("El cronograma es obligatorio."),
+  timeline: optionalText,
   notes: optionalText,
 }).strip();
 
@@ -248,6 +319,23 @@ export const notificationSchema = z.object({
   message: text("El mensaje es obligatorio."),
   dueDate: optionalText,
   status: z.enum(["active", "read", "archived"]).default("active"),
+}).strip();
+
+export const galleryImageSchema = z.object({
+  title: text("El titulo es obligatorio."),
+  category: text("La categoria es obligatoria."),
+  imageUrl: text("La imagen es obligatoria."),
+  alt: optionalText,
+  status: z.enum(["active", "inactive"]).default("active"),
+}).strip();
+
+export const certificationSchema = z.object({
+  title: text("El titulo es obligatorio."),
+  issuer: optionalText,
+  category: text("La categoria es obligatoria."),
+  fileUrl: text("El archivo o imagen es obligatorio."),
+  fileType: z.enum(["image", "document"]).default("image"),
+  status: z.enum(["active", "inactive"]).default("active"),
 }).strip();
 
 export function createCrudStore<T>(collectionName: string, schema: z.ZodType<Omit<T, "_id" | "createdAt" | "updatedAt">>) {
@@ -346,6 +434,94 @@ export async function validateWorkerDocumentId(documentId: string, excludeId?: s
   if (existing) {
     throw new Error("Ya existe un trabajador registrado con esta cedula.");
   }
+}
+
+export async function validateWorkerIntakeDocumentId(documentId: string, excludeIntakeId?: string) {
+  const cleanDocumentId = documentId.trim();
+  if (!cleanDocumentId) return;
+
+  const db = await getDb();
+  const worker = await db.collection<Document>("workers").findOne({ documentId: cleanDocumentId });
+  if (worker) {
+    throw new Error("Ya existe un trabajador registrado con esta cedula.");
+  }
+
+  const intakeQuery: Document = { documentId: cleanDocumentId, status: { $ne: "rejected" } };
+  if (excludeIntakeId && ObjectId.isValid(excludeIntakeId)) {
+    intakeQuery._id = { $ne: new ObjectId(excludeIntakeId) };
+  }
+
+  const intake = await db.collection<Document>("worker_intakes").findOne(intakeQuery);
+  if (intake) {
+    throw new Error("Ya existe un ingreso de trabajador activo con esta cedula.");
+  }
+}
+
+export async function ensureDefaultEmployeePositions() {
+  const db = await getDb();
+  const count = await db.collection<Document>("employee_positions").countDocuments();
+  if (count > 0) return;
+
+  const now = new Date();
+  const names = [
+    "ADMINISTRADOR",
+    "PRESIDENTE",
+    "REPRESENTANTE LEGAL",
+    "CONTADORA",
+    "SECRETARIA",
+    "SUPERVISOR GENERAL",
+    "SUPERVISOR",
+    "AUXILIAR DE LIMPIEZA",
+    "BODEGUERO",
+    "MEDICO OCUPACIONAL",
+    "AUXILIAR DE DILUSIONES",
+  ];
+
+  await db.collection<Document>("employee_positions").insertMany(
+    names.map((name, index) => ({
+      code: `CAR-${String(index + 1).padStart(3, "0")}`,
+      name,
+      description: "",
+      status: "active",
+      createdAt: now,
+      updatedAt: now,
+    }))
+  );
+}
+
+export async function ensureDefaultServiceTypes() {
+  const db = await getDb();
+  const count = await db.collection<Document>("service_types").countDocuments();
+  if (count > 0) return;
+
+  const now = new Date();
+  const services = [
+    ["SER-001", "Limpieza hospitalaria", "Mantenemos la asepsia en hospitales, clinicas y laboratorios con protocolos de bioseguridad certificados.", "/hospital.jpg"],
+    ["SER-002", "Limpieza de oficinas y edificios", "Cuidamos la presentacion y salubridad de entornos laborales mediante limpiezas diarias, profundas y de mantenimiento.", "/oficinas.jpg"],
+    ["SER-003", "Limpieza especializada", "Servicios adaptados a industrias, plantas de produccion y zonas de dificil acceso, con personal tecnico calificado.", "/work3.jpg"],
+    ["SER-004", "Sanitizacion de ambientes", "Eliminamos virus, bacterias y hongos con tecnicas avanzadas de nebulizacion y desinfeccion.", "/sanitizacion.jpg"],
+    ["SER-005", "Limpieza de hogar", "Soluciones confiables para el cuidado y limpieza de viviendas, con personal de confianza.", "/hogar1.jpg"],
+    ["SER-006", "Limpieza de centros comerciales y retail", "Mantenimiento integral de espacios con alta afluencia de personas.", "/retail3.jpg"],
+    ["SER-007", "Limpieza y mantenimiento de areas verdes", "Podas, riegos y mantenimiento de jardines para conservar espacios naturales y agradables.", "/jardin3.jpg"],
+    ["SER-008", "Fumigacion, desinfeccion y desratizacion", "Tratamientos certificados para el control de plagas, garantizando seguridad y efectividad.", "/fumigar.jpg"],
+  ];
+
+  await db.collection<Document>("service_types").insertMany(
+    services.map(([code, name, detail, imageUrl]) => ({
+      code,
+      name,
+      detail,
+      activities: detail,
+      imageUrl,
+      imagePublicId: "",
+      regularPrice: 0,
+      discountPercent: 0,
+      offerPrice: 0,
+      status: "active",
+      createdAt: now,
+      updatedAt: now,
+    }))
+  );
 }
 
 export function getOperationsErrorMessage(error: unknown) {

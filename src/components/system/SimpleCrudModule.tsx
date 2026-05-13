@@ -6,7 +6,7 @@ import ImportCsvModal from "@/components/system/ImportCsvModal";
 export type CrudField<T extends Record<string, unknown>> = {
   key: keyof T & string;
   label: string;
-  type?: "text" | "email" | "date" | "textarea" | "select";
+  type?: "text" | "email" | "date" | "textarea" | "select" | "image";
   required?: boolean;
   options?: { value: string; label: string }[];
 };
@@ -123,6 +123,20 @@ export default function SimpleCrudModule<T extends Record<string, unknown>>({
     setForm((current) => ({ ...current, [key]: value }));
   }
 
+  async function uploadImage(key: keyof T & string, file: File) {
+    setStatus("Cargando imagen...");
+    const body = new FormData();
+    body.append("file", file);
+    const res = await fetch("/api/admin/uploads", { method: "POST", body });
+    const data = await res.json().catch(() => ({}));
+    if (!res.ok) {
+      setStatus(data.error || "No se pudo cargar la imagen.");
+      return;
+    }
+    updateField(key, data.imageUrl);
+    setStatus("Imagen cargada. Guarda el registro para conservar el cambio.");
+  }
+
   return (
     <>
       {status && <p className="mb-5 rounded-md border border-slate-200 bg-white px-4 py-3 text-sm text-slate-700">{status}</p>}
@@ -196,6 +210,30 @@ export default function SimpleCrudModule<T extends Record<string, unknown>>({
                   <select className={inputClass} required={field.required} value={String(form[field.key] || "")} onChange={(e) => updateField(field.key, e.target.value)}>
                     {field.options?.map((option) => <option key={option.value} value={option.value}>{option.label}</option>)}
                   </select>
+                ) : field.type === "image" ? (
+                  <div className="grid gap-3">
+                    {String(form[field.key] || "") && (
+                      // eslint-disable-next-line @next/next/no-img-element
+                      <img src={String(form[field.key])} alt="" className="h-36 w-full rounded-md border border-slate-200 object-contain" />
+                    )}
+                    <input
+                      type="file"
+                      accept="image/*"
+                      className={inputClass}
+                      onChange={(e) => {
+                        const file = e.target.files?.[0];
+                        if (file) uploadImage(field.key, file);
+                        e.currentTarget.value = "";
+                      }}
+                    />
+                    <input
+                      required={field.required}
+                      className={inputClass}
+                      value={String(form[field.key] || "")}
+                      onChange={(e) => updateField(field.key, e.target.value)}
+                      placeholder="Tambien puedes pegar una URL"
+                    />
+                  </div>
                 ) : (
                   <input
                     required={field.required}

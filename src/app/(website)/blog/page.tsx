@@ -1,6 +1,6 @@
 import type { Metadata } from "next";
 import BlogPostCard from "@/components/BlogPostCard";
-import { getAllPosts } from "@/lib/blogStore";
+import { getPublishedPosts } from "@/lib/blogStore";
 
 export const dynamic = "force-dynamic";
 
@@ -10,7 +10,7 @@ export const metadata: Metadata = {
 };
 
 export default async function BlogPage() {
-  const posts = await getAllPosts();
+  const posts = await getPublishedPosts();
 
   return (
     <main className="bg-slate-50">

@@ -17,6 +17,7 @@ const postSchema = z.object({
   date: z.string().min(10, "La fecha es obligatoria."),
   author: z.string().optional(),
   tags: z.array(z.string()).optional(),
+  status: z.enum(["draft", "published"]).default("published"),
   content: z.string().min(5, "El contenido debe tener al menos 5 caracteres."),
 });
 
@@ -29,9 +30,19 @@ export async function getAllPosts() {
   return posts.sort((a, b) => (a.date < b.date ? 1 : -1));
 }
 
+export async function getPublishedPosts() {
+  const posts = await getAllPosts();
+  return posts.filter((post) => (post.status || "published") === "published");
+}
+
 export async function getPostBySlug(slug: string) {
   const posts = await readPosts();
   return posts.find((p) => p.slug === slug);
+}
+
+export async function getPublishedPostBySlug(slug: string) {
+  const post = await getPostBySlug(slug);
+  return post && (post.status || "published") === "published" ? post : undefined;
 }
 
 export async function createPost(input: PostInput) {
@@ -164,6 +175,7 @@ function normalizeInput(input: PostInput) {
     date: input.date?.trim(),
     author: input.author?.trim() || "Equipo ASOSERLID",
     tags: input.tags?.map((tag) => tag.trim()).filter(Boolean) ?? [],
+    status: input.status || "published",
     content: input.content?.trim(),
   };
 }

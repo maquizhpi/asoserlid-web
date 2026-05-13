@@ -1,20 +1,19 @@
 import "server-only";
 
-import bcrypt from "bcryptjs";
 import { ObjectId } from "mongodb";
 import { z } from "zod";
 import { adminModules } from "@/lib/adminModules";
 import { getDb } from "@/lib/mongodb";
+import { hashPassword, verifyPassword } from "@/lib/passwords";
 import { roleLabels, userRoles } from "@/lib/userRoles";
 import type { AdminUser, UserRole } from "@/types/admin";
 
 const usersCollection = "users";
-const saltRounds = 12;
 
 const roleAccess: Record<UserRole, string[]> = {
   administrator: adminModules.map((module) => module.key),
   supervisor: ["dashboard-supervisor", "workers", "work-groups", "clients", "contracts-shifts", "supervisor-daily-report", "machines", "notifications"],
-  operations: ["clients", "work-groups", "contracts-shifts", "supervisor-daily-report", "report-approvals", "machines", "supply-products", "supply-kits", "supply-control", "hiring-processes", "process-calendar", "notifications"],
+  operations: ["clients", "work-groups", "contracts-shifts", "supervisor-daily-report", "report-approvals", "machines", "supply-products", "supply-kits", "supply-control", "hiring-processes", "process-calendar", "notifications", "audits"],
   human_resources: ["workers", "worker-intake", "worker-documents", "labor-history", "work-groups", "contracts-shifts", "supervisor-daily-report", "report-approvals", "notifications"],
   accounting: ["dashboard-accounting", "accounting", "payment-calculation", "exports", "report-approvals", "notifications"],
   client: ["contracts-shifts", "supervisor-daily-report", "exports", "supply-products", "supply-kits", "notifications"],
@@ -63,7 +62,7 @@ export async function ensureDefaultAdminUser() {
   const adminUser: UserDocument = {
     name: "Administrador ASOSERLID",
     email,
-    passwordHash: await bcrypt.hash(password, saltRounds),
+    passwordHash: await hashPassword(password),
     roles: ["administrator"],
     moduleAccess: getDefaultAccessForRoles(["administrator"]),
     active: true,
@@ -85,8 +84,17 @@ export async function validateUserCredentials(emailInput: string, password: stri
   const user = await db.collection<UserDocument>(usersCollection).findOne({ email, active: true });
   if (!user) return null;
 
-  const validPassword = await bcrypt.compare(password, user.passwordHash);
-  return validPassword ? serializeUser(user) : null;
+  const result = await verifyPassword(password, user.passwordHash);
+  if (!result.valid) return null;
+
+  if (result.needsRehash && user._id) {
+    await db.collection<UserDocument>(usersCollection).updateOne(
+      { _id: user._id },
+      { $set: { passwordHash: await hashPassword(password), updatedAt: new Date() } }
+    );
+  }
+
+  return serializeUser(user);
 }
 
 export async function getUsers() {
@@ -94,6 +102,15 @@ export async function getUsers() {
   const db = await getDb();
   const users = await db.collection<UserDocument>(usersCollection).find().sort({ createdAt: -1 }).toArray();
   return users.map(serializeUser);
+}
+
+export async function getUserById(id: string) {
+  await ensureDefaultAdminUser();
+  if (!ObjectId.isValid(id)) return null;
+
+  const db = await getDb();
+  const user = await db.collection<UserDocument>(usersCollection).findOne({ _id: new ObjectId(id) });
+  return user ? serializeUser(user) : null;
 }
 
 export async function createUser(input: unknown) {
@@ -111,7 +128,7 @@ export async function createUser(input: unknown) {
     workerDocumentId: data.workerDocumentId,
     name: data.name,
     email: data.email,
-    passwordHash: await bcrypt.hash(data.password, saltRounds),
+    passwordHash: await hashPassword(data.password),
     roles: data.roles,
     moduleAccess: data.moduleAccess,
     active: data.active,
@@ -143,7 +160,7 @@ export async function updateUser(id: string, input: unknown) {
   };
 
   if (data.password) {
-    update.passwordHash = await bcrypt.hash(data.password, saltRounds);
+    update.passwordHash = await hashPassword(data.password);
   }
 
   try {

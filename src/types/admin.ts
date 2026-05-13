@@ -68,6 +68,34 @@ export type WorkerIntake = {
   resumeUrl?: string;
   resumePublicId?: string;
   status: "received" | "reviewing" | "accepted" | "rejected";
+  approvedWorkerId?: string;
+  approvedAt?: string;
+  createdAt?: string;
+  updatedAt?: string;
+};
+
+export type EmployeePosition = {
+  _id?: string;
+  code: string;
+  name: string;
+  description?: string;
+  status: "active" | "inactive";
+  createdAt?: string;
+  updatedAt?: string;
+};
+
+export type ServiceType = {
+  _id?: string;
+  code: string;
+  name: string;
+  detail: string;
+  activities: string;
+  imageUrl?: string;
+  imagePublicId?: string;
+  regularPrice?: number;
+  discountPercent?: number;
+  offerPrice?: number;
+  status: "active" | "inactive";
   createdAt?: string;
   updatedAt?: string;
 };
@@ -95,6 +123,47 @@ export type AdminOverviewItem = {
   status: "ready" | "base";
   required: boolean;
   count: number | null;
+};
+
+export type AuditLog = {
+  _id?: string;
+  action: "create" | "update" | "delete";
+  moduleKey: string;
+  collection: string;
+  recordId?: string;
+  recordLabel?: string;
+  userId?: string;
+  userEmail?: string;
+  userRoles?: string[];
+  summary: string;
+  beforeSnapshot?: Record<string, unknown> | null;
+  afterSnapshot?: Record<string, unknown> | null;
+  restoredAt?: string;
+  restoredBy?: string;
+  createdAt?: string;
+};
+
+export type GalleryImage = {
+  _id?: string;
+  title: string;
+  category: string;
+  imageUrl: string;
+  alt?: string;
+  status: "active" | "inactive";
+  createdAt?: string;
+  updatedAt?: string;
+};
+
+export type CertificationItem = {
+  _id?: string;
+  title: string;
+  issuer?: string;
+  category: string;
+  fileUrl: string;
+  fileType: "image" | "document";
+  status: "active" | "inactive";
+  createdAt?: string;
+  updatedAt?: string;
 };
 
 export type AdminUser = {
@@ -129,6 +198,7 @@ export type Worker = {
   assignedContractId?: string;
   assignedContract?: string;
   assignedArea?: string;
+  assignedSchedule?: string;
   supervisor?: string;
   workGroupId?: string;
   workGroupName?: string;
@@ -325,15 +395,79 @@ export type SupplyMovement = {
   updatedAt?: string;
 };
 
+export type HiringProcessStatus =
+  | "Planificado"
+  | "En seguimiento"
+  | "Por vencer"
+  | "Vencido"
+  | "Adjudicado"
+  | "Desierto"
+  | "Cancelado"
+  | "Finalizado";
+
+export type CronogramaFecha = {
+  id: string;
+  tipoFecha: string;
+  fechaHora: string;
+  descripcion: string;
+  estado: "Pendiente" | "Hoy" | "Proxima" | "Vencida" | "Cumplida";
+  observacion?: string;
+};
+
+export type AgendaActividad = {
+  id: string;
+  titulo: string;
+  descripcion?: string;
+  fechaHoraInicio: string;
+  fechaHoraFin?: string;
+  responsable?: string;
+  prioridad: "Alta" | "Media" | "Baja";
+  estado: "Pendiente" | "En proceso" | "Cumplido" | "Vencido" | "Reprogramado";
+  origen: "Automatico" | "Manual";
+  procesoRelacionado?: string;
+  observaciones?: string;
+  fechaCumplimiento?: string;
+};
+
+export type HiringProcessFile = {
+  id: string;
+  nombre: string;
+  url?: string;
+  tipo?: string;
+  observacion?: string;
+  createdAt?: string;
+};
+
 export type HiringProcess = {
   _id?: string;
-  processNumber: string;
-  title: string;
+  numeroProceso: string;
+  entidadCliente: string;
+  objetoProceso: string;
+  tipoCompra?: string;
+  presupuestoReferencialSinIva?: number;
+  tipoContratacion?: string;
+  formaPago?: string;
+  tipoAdjudicacion?: string;
+  plazoEntregaDias?: number;
+  vigenciaOfertaDias?: number;
+  funcionarioEncargado?: string;
+  areaResponsable: string;
+  estadoProceso: HiringProcessStatus;
+  descripcion?: string;
+  notas?: string;
+  fechaInicio: string;
+  fechaVencimiento: string;
+  cronograma: CronogramaFecha[];
+  agendaOperacional: AgendaActividad[];
+  archivos?: HiringProcessFile[];
+  processNumber?: string;
+  title?: string;
   clientName?: string;
+  area?: string;
   startDate: string;
   dueDate: string;
   status: "planned" | "in_progress" | "paused" | "completed" | "cancelled";
-  timeline: string;
+  timeline?: string;
   notes?: string;
   createdAt?: string;
   updatedAt?: string;

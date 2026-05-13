@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import nodemailer from "nodemailer";
 import { z } from "zod";
+import { checkRateLimit, getClientIp, rateLimitHeaders } from "@/lib/rateLimit";
 
 const schema = z.object({
   name: z.string().min(2),
@@ -14,6 +15,15 @@ type ContactData = z.infer<typeof schema>;
 
 export async function POST(req: NextRequest) {
   try {
+    const ip = getClientIp(req);
+    const limited = checkRateLimit(`contact:${ip}`, { limit: 8, windowMs: 10 * 60 * 1000 });
+    if (!limited.allowed) {
+      return NextResponse.json(
+        { ok: false, error: "Demasiados mensajes. Intenta nuevamente en unos minutos." },
+        { status: 429, headers: rateLimitHeaders(limited) }
+      );
+    }
+
     const body = await req.json();
     const data = schema.parse(body);
 

@@ -6,6 +6,7 @@ export type Post = {
   date: string;
   author?: string;
   tags?: string[];
+  status?: "draft" | "published";
   content: string;
 };
 

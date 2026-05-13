@@ -99,7 +99,7 @@ async function uploadToDrive(file: File, buffer: Buffer) {
     throw new Error("Missing GOOGLE_DRIVE_FOLDER_ID.");
   }
 
-  const drive = getDriveClient();
+  const drive = await getDriveClient();
   const safeName = sanitizeFileName(file.name);
 
   const created = await drive.files.create({

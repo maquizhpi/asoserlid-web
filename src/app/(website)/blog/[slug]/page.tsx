@@ -4,7 +4,7 @@ import Link from "next/link";
 import { notFound } from "next/navigation";
 import ClientComments from "@/components/ClientComments";
 import ShareButtons from "@/components/ShareButtons";
-import { getPostBySlug } from "@/lib/blogStore";
+import { getPublishedPostBySlug } from "@/lib/blogStore";
 
 type Params = Promise<{ slug: string }>;
 
@@ -12,7 +12,7 @@ export const dynamic = "force-dynamic";
 
 export async function generateMetadata({ params }: { params: Params }): Promise<Metadata> {
   const { slug } = await params;
-  const post = await getPostBySlug(slug);
+  const post = await getPublishedPostBySlug(slug);
   if (!post) return { title: "Artículo no encontrado | ASOSERLID" };
 
   return {
@@ -29,7 +29,7 @@ export async function generateMetadata({ params }: { params: Params }): Promise<
 
 export default async function PostPage({ params }: { params: Params }) {
   const { slug } = await params;
-  const post = await getPostBySlug(slug);
+  const post = await getPublishedPostBySlug(slug);
   if (!post) return notFound();
 
   return (

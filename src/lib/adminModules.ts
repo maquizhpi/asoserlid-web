@@ -6,10 +6,59 @@ export type AdminModule = {
   collection?: string;
   status: "ready" | "base";
   required: boolean;
-  group: "settings" | "operations" | "reports" | "resources";
+  group: "settings" | "operations" | "reports" | "resources" | "content";
 };
 
 export const adminModules: AdminModule[] = [
+  {
+    key: "blog",
+    title: "Blog institucional",
+    href: "/admin/blog",
+    description: "Edicion de publicaciones, portadas y contenido institucional.",
+    collection: "blog_posts",
+    status: "ready",
+    required: true,
+    group: "content",
+  },
+  {
+    key: "audits",
+    title: "Auditorias",
+    href: "/admin/auditorias",
+    description: "Registro de cambios realizados por usuarios del sistema.",
+    collection: "audit_logs",
+    status: "ready",
+    required: true,
+    group: "content",
+  },
+  {
+    key: "gallery",
+    title: "Galeria",
+    href: "/admin/galeria",
+    description: "Imagenes de servicios por categoria para la pagina institucional.",
+    collection: "gallery_images",
+    status: "ready",
+    required: true,
+    group: "content",
+  },
+  {
+    key: "certifications",
+    title: "Certificaciones",
+    href: "/admin/certificaciones",
+    description: "Documentos e imagenes de respaldo institucional.",
+    collection: "certifications",
+    status: "ready",
+    required: true,
+    group: "content",
+  },
+  {
+    key: "backups",
+    title: "Respaldos",
+    href: "/admin/respaldos",
+    description: "Exportacion de respaldo de la informacion del sistema.",
+    status: "ready",
+    required: true,
+    group: "content",
+  },
   {
     key: "roles",
     title: "Login y roles",
@@ -105,8 +154,8 @@ export const adminModules: AdminModule[] = [
     title: "Catalogos",
     href: "/admin/catalogos",
     description: "Catalogos generales reutilizables del sistema.",
-    collection: "catalogs",
-    status: "base",
+    collection: "employee_positions",
+    status: "ready",
     required: true,
     group: "settings",
   },
@@ -116,7 +165,7 @@ export const adminModules: AdminModule[] = [
     href: "/admin/tipos-servicios",
     description: "Tipos de servicios ofrecidos y usados en contratos.",
     collection: "service_types",
-    status: "base",
+    status: "ready",
     required: true,
     group: "settings",
   },
@@ -266,6 +315,7 @@ export const settingsModules = adminModules.filter((module) => module.group === 
 export const operationsModules = adminModules.filter((module) => module.group === "operations");
 export const resourcesModules = adminModules.filter((module) => module.group === "resources");
 export const reportsModules = adminModules.filter((module) => module.group === "reports");
+export const contentModules = adminModules.filter((module) => module.group === "content");
 
 export function getModuleByKey(key: string) {
   return adminModules.find((module) => module.key === key);
