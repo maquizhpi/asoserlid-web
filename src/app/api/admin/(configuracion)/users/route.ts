@@ -1,15 +1,15 @@
 import { NextRequest, NextResponse } from "next/server";
-import { hasModuleAccess } from "@/lib/adminAuth";
+import { hasAnyRole } from "@/lib/adminAuth";
 import { auditSummary, recordAuditLog } from "@/lib/auditStore";
-import { createUser, getUsers, getUserStoreErrorMessage } from "@/lib/userStore";
+import { createUser, getUserStoreErrorMessage, getUserSummaries } from "@/lib/userStore";
 
 export async function GET() {
-  if (!(await hasModuleAccess("users"))) {
-    return NextResponse.json({ ok: false, error: "No autorizado." }, { status: 401 });
+  if (!(await hasAnyRole(["administrator"]))) {
+    return NextResponse.json({ ok: false, error: "Acceso denegado." }, { status: 403 });
   }
 
   try {
-    const users = await getUsers();
+    const users = await getUserSummaries();
     return NextResponse.json({ ok: true, users });
   } catch (error) {
     return NextResponse.json({ ok: false, error: getUserStoreErrorMessage(error) }, { status: 500 });
@@ -17,8 +17,8 @@ export async function GET() {
 }
 
 export async function POST(req: NextRequest) {
-  if (!(await hasModuleAccess("users"))) {
-    return NextResponse.json({ ok: false, error: "No autorizado." }, { status: 401 });
+  if (!(await hasAnyRole(["administrator"]))) {
+    return NextResponse.json({ ok: false, error: "Acceso denegado." }, { status: 403 });
   }
 
   try {

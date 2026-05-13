@@ -104,6 +104,26 @@ export async function getUsers() {
   return users.map(serializeUser);
 }
 
+export async function getUserSummaries() {
+  await ensureDefaultAdminUser();
+  const db = await getDb();
+  const users = await db
+    .collection<UserDocument>(usersCollection)
+    .find({}, { projection: { name: 1, email: 1, roles: 1, active: 1, createdAt: 1, updatedAt: 1 } })
+    .sort({ createdAt: -1 })
+    .toArray();
+
+  return users.map((user) => ({
+    _id: user._id?.toString(),
+    name: user.name,
+    email: user.email,
+    roles: user.roles,
+    active: user.active,
+    createdAt: user.createdAt.toISOString(),
+    updatedAt: user.updatedAt.toISOString(),
+  }));
+}
+
 export async function getUserById(id: string) {
   await ensureDefaultAdminUser();
   if (!ObjectId.isValid(id)) return null;

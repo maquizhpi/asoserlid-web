@@ -72,6 +72,7 @@ type SidebarSection = {
 
 const idleTimeoutMs = 30 * 60 * 1000;
 const redirectStorageKey = "asoserlid_admin_redirect_after_login";
+const shellUserStorageKey = "asoserlid_admin_shell_user";
 
 const moduleIcons: Record<string, typeof DashboardIcon> = {
   roles: SupervisorAccountIcon,
@@ -286,11 +287,16 @@ export default function SystemShell({ title, subtitle, activeKey, children }: Sy
 
   useEffect(() => {
     let mounted = true;
+    const cachedUser = readCachedShellUser();
+    if (cachedUser) setSessionUser(cachedUser);
 
     fetch("/api/admin/me", { cache: "no-store" })
       .then((response) => (response.ok ? response.json() : null))
       .then((data) => {
-        if (mounted && data?.user) setSessionUser(data.user);
+        if (mounted && data?.user) {
+          setSessionUser(data.user);
+          sessionStorage.setItem(shellUserStorageKey, JSON.stringify(data.user));
+        }
       })
       .catch(() => {
         if (mounted) setSessionUser(null);
@@ -331,8 +337,25 @@ export default function SystemShell({ title, subtitle, activeKey, children }: Sy
     };
   }, [router]);
 
+  useEffect(() => {
+    const endSessionOnClose = () => {
+      sessionStorage.removeItem(shellUserStorageKey);
+      const target = `${window.location.pathname}${window.location.search}${window.location.hash}`;
+      sessionStorage.setItem(redirectStorageKey, target);
+      if (navigator.sendBeacon) {
+        navigator.sendBeacon("/api/admin/session/end", new Blob(["{}"], { type: "application/json" }));
+        return;
+      }
+      void fetch("/api/admin/session/end", { method: "POST", keepalive: true });
+    };
+
+    window.addEventListener("pagehide", endSessionOnClose);
+    return () => window.removeEventListener("pagehide", endSessionOnClose);
+  }, []);
+
   async function logout() {
     sessionStorage.removeItem(redirectStorageKey);
+    sessionStorage.removeItem(shellUserStorageKey);
     await fetch("/api/admin/login", { method: "DELETE" });
     router.push("/admin");
     router.refresh();
@@ -535,4 +558,14 @@ function isItemActive(item: SidebarItem, activeKey: string | undefined, pathname
 
 function formatRoles(roles: UserRole[]) {
   return roles.map((role) => roleLabels[role] || role).join(", ");
+}
+
+function readCachedShellUser() {
+  try {
+    const value = sessionStorage.getItem(shellUserStorageKey);
+    if (!value) return null;
+    return JSON.parse(value) as ShellUser;
+  } catch {
+    return null;
+  }
 }

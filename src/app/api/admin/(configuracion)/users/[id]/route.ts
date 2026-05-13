@@ -1,15 +1,33 @@
 import { NextRequest, NextResponse } from "next/server";
-import { hasModuleAccess } from "@/lib/adminAuth";
+import { hasAnyRole } from "@/lib/adminAuth";
 import { auditSummary, recordAuditLog } from "@/lib/auditStore";
-import { deleteUser, getUserStoreErrorMessage, updateUser } from "@/lib/userStore";
+import { deleteUser, getUserById, getUserStoreErrorMessage, updateUser } from "@/lib/userStore";
 
 type RouteContext = {
   params: Promise<{ id: string }>;
 };
 
+export async function GET(_req: NextRequest, context: RouteContext) {
+  if (!(await hasAnyRole(["administrator"]))) {
+    return NextResponse.json({ ok: false, error: "Acceso denegado." }, { status: 403 });
+  }
+
+  try {
+    const { id } = await context.params;
+    const user = await getUserById(id);
+    if (!user) {
+      return NextResponse.json({ ok: false, error: "Usuario no encontrado." }, { status: 404 });
+    }
+
+    return NextResponse.json({ ok: true, user });
+  } catch (error) {
+    return NextResponse.json({ ok: false, error: getUserStoreErrorMessage(error) }, { status: 400 });
+  }
+}
+
 export async function PUT(req: NextRequest, context: RouteContext) {
-  if (!(await hasModuleAccess("users"))) {
-    return NextResponse.json({ ok: false, error: "No autorizado." }, { status: 401 });
+  if (!(await hasAnyRole(["administrator"]))) {
+    return NextResponse.json({ ok: false, error: "Acceso denegado." }, { status: 403 });
   }
 
   try {
@@ -34,8 +52,8 @@ export async function PUT(req: NextRequest, context: RouteContext) {
 }
 
 export async function DELETE(_req: NextRequest, context: RouteContext) {
-  if (!(await hasModuleAccess("users"))) {
-    return NextResponse.json({ ok: false, error: "No autorizado." }, { status: 401 });
+  if (!(await hasAnyRole(["administrator"]))) {
+    return NextResponse.json({ ok: false, error: "Acceso denegado." }, { status: 403 });
   }
 
   try {

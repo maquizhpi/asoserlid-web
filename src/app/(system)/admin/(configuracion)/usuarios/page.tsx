@@ -25,18 +25,33 @@ export default function UsersModulePage() {
   const [userForm, setUserForm] = useState<AdminUserInput>(emptyUser);
   const [status, setStatus] = useState<string | null>(null);
 
-  const selectedUser = useMemo(
-    () => users.find((user) => user._id === selectedUserId),
-    [users, selectedUserId]
-  );
-
   useEffect(() => {
     loadUsers();
   }, []);
 
   useEffect(() => {
-    setUserForm(selectedUser ? { ...selectedUser, password: "" } : emptyUser);
-  }, [selectedUser]);
+    let mounted = true;
+
+    if (selectedUserId === "new") {
+      setUserForm(emptyUser);
+      return;
+    }
+
+    fetch(`/api/admin/users/${selectedUserId}`, { cache: "no-store" })
+      .then((response) => (response.ok ? response.json() : Promise.reject(response)))
+      .then((data) => {
+        if (!mounted) return;
+        if (data.user) setUserForm({ ...data.user, password: "" });
+      })
+      .catch(() => {
+        if (!mounted) return;
+        setStatus("No se pudo cargar el detalle del usuario.");
+      });
+
+    return () => {
+      mounted = false;
+    };
+  }, [selectedUserId]);
 
   async function loadUsers() {
     const [modulesRes, usersRes, workersRes] = await Promise.all([

@@ -23,15 +23,15 @@ export async function isAdminAuthenticated() {
 }
 
 export async function hasModuleAccess(moduleKey: string) {
-  const user = await getCurrentAdminUser();
-  if (!user) return false;
-  return user.roles.includes("administrator") || user.moduleAccess.includes(moduleKey);
+  const session = await getAdminSession();
+  if (!session) return false;
+  return session.roles.includes("administrator") || session.moduleAccess.includes(moduleKey);
 }
 
 export async function hasAnyRole(roles: string[]) {
-  const user = await getCurrentAdminUser();
-  if (!user) return false;
-  return roles.some((role) => user.roles.includes(role as UserRole));
+  const session = await getAdminSession();
+  if (!session) return false;
+  return roles.some((role) => session.roles.includes(role));
 }
 
 export async function setAdminSession(user: AdminUser) {
