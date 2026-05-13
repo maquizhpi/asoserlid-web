@@ -1,6 +1,6 @@
 import "server-only";
 
-import * as XLSX from "xlsx";
+import ExcelJS from "exceljs";
 
 export type ImportResult = {
   imported: number;
@@ -8,11 +8,14 @@ export type ImportResult = {
   errors: string[];
 };
 
-export function spreadsheetResponse(filename: string, headers: string[]) {
-  const workbook = XLSX.utils.book_new();
-  const worksheet = XLSX.utils.aoa_to_sheet([headers]);
-  XLSX.utils.book_append_sheet(workbook, worksheet, "Datos");
-  const buffer = XLSX.write(workbook, { type: "buffer", bookType: "xlsx" }) as Buffer;
+export async function spreadsheetResponse(filename: string, headers: string[]) {
+  const workbook = new ExcelJS.Workbook();
+  const worksheet = workbook.addWorksheet("Datos");
+  worksheet.addRow(headers);
+  worksheet.getRow(1).font = { bold: true };
+  worksheet.columns = headers.map((header) => ({ header, key: header, width: Math.max(header.length + 4, 18) }));
+
+  const buffer = Buffer.from(await workbook.xlsx.writeBuffer());
   const body = buffer.buffer.slice(buffer.byteOffset, buffer.byteOffset + buffer.byteLength) as ArrayBuffer;
 
   return new Response(body, {
@@ -43,18 +46,27 @@ export function requireImportFile(file: FormDataEntryValue | null): File {
 
 async function readSpreadsheetFile(file: File) {
   const buffer = Buffer.from(await file.arrayBuffer());
-  const workbook = XLSX.read(buffer, { type: "buffer" });
-  const sheetName = workbook.SheetNames[0];
-  if (!sheetName) return [];
+  const workbook = new ExcelJS.Workbook();
+  await workbook.xlsx.load(buffer as unknown as Parameters<typeof workbook.xlsx.load>[0]);
+  const worksheet = workbook.worksheets[0];
+  if (!worksheet) return [];
 
-  const rows = XLSX.utils.sheet_to_json<Record<string, unknown>>(workbook.Sheets[sheetName], {
-    defval: "",
-    raw: false,
+  const headers = getWorksheetRowValues(worksheet.getRow(1)).map((header) => normalizeHeader(header));
+  const rows: Record<string, string>[] = [];
+
+  worksheet.eachRow((row, rowNumber) => {
+    if (rowNumber === 1) return;
+    const values = getWorksheetRowValues(row);
+    if (!values.some((value) => value.trim())) return;
+
+    const item: Record<string, string> = {};
+    headers.forEach((header, index) => {
+      item[header] = (values[index] || "").trim();
+    });
+    rows.push(item);
   });
 
-  return rows.map((row) =>
-    Object.fromEntries(Object.entries(row).map(([key, value]) => [normalizeHeader(key), String(value || "").trim()]))
-  );
+  return rows;
 }
 
 async function readCsvFile(file: File) {
@@ -118,4 +130,15 @@ function parseCsv(input: string) {
 
 function normalizeHeader(value: string) {
   return value.trim().replace(/^\uFEFF/, "");
+}
+
+function getWorksheetRowValues(row: ExcelJS.Row) {
+  const values = row.values;
+  if (!Array.isArray(values)) return [];
+  return values.slice(1).map((value) => {
+    if (value instanceof Date) return value.toISOString();
+    if (typeof value === "object" && value && "text" in value) return String(value.text || "");
+    if (typeof value === "object" && value && "result" in value) return String(value.result || "");
+    return String(value || "");
+  });
 }

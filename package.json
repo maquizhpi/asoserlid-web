@@ -17,13 +17,13 @@
     "bcryptjs": "^3.0.3",
     "cloudinary": "^2.10.0",
     "clsx": "^2.1.1",
+    "exceljs": "^4.4.0",
     "googleapis": "^171.4.0",
     "mongodb": "^7.2.0",
-    "next": "^16.1.4",
-    "nodemailer": "^7.0.9",
+    "next": "^16.2.6",
+    "nodemailer": "^8.0.7",
     "react": "^19.2.3",
     "react-dom": "^19.2.3",
-    "xlsx": "^0.18.5",
     "zod": "^4.1.12"
   },
   "devDependencies": {
@@ -34,8 +34,11 @@
     "@types/react": "^19",
     "@types/react-dom": "^19",
     "eslint": "^9",
-    "eslint-config-next": "15.5.6",
+    "eslint-config-next": "^15.5.6",
     "tailwindcss": "^4",
     "typescript": "^5"
+  },
+  "overrides": {
+    "postcss": "8.5.14"
   }
 }
