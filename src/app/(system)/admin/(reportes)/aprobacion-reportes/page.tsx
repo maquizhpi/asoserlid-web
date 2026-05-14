@@ -67,8 +67,8 @@ export default function ReportApprovalsPage() {
                   selected?._id === report._id ? "border-[#33C3C9] bg-[#E6F8F9]" : "border-slate-200 hover:bg-slate-50"
                 }`}
               >
-                <span className="block font-semibold text-[#173C61]">{report.workerName}</span>
-                <span className="mt-1 block text-xs text-slate-500">{report.date} - {statusLabel(report.reportStatus)}</span>
+                <span className="block font-semibold text-[#173C61]">{report.clientName}</span>
+                <span className="mt-1 block text-xs text-slate-500">{report.date} - {report.workplaceName || report.workerName} - {statusLabel(report.reportStatus)}</span>
               </button>
             ))}
             {reports.length === 0 && <p className="text-sm text-slate-500">No hay reportes enviados.</p>}
@@ -79,16 +79,47 @@ export default function ReportApprovalsPage() {
           {selected ? (
             <>
               <div className="grid gap-3 sm:grid-cols-3">
-                <Info label="Trabajador" value={selected.workerName} />
+                <Info label="Contrato" value={selected.contractName || selected.clientName} />
                 <Info label="Supervisor" value={selected.supervisor} />
                 <Info label="Cliente" value={selected.clientName} />
                 <Info label="Fecha" value={selected.date} />
+                <Info label="Lugar" value={selected.workplaceName || "Sin lugar"} />
+                <Info label="Area / turno" value={`${selected.areaName || "Sin area"} - ${selected.shiftName || "Sin turno"}`} />
                 <Info label="Horas normales" value={formatNumber(selected.normalHours)} />
                 <Info label="Horas extras" value={formatNumber(selected.overtimeHours)} />
-                <Info label="Asistencia" value={attendanceLabel(selected.attendanceStatus)} />
+                <Info label="Trabajadores" value={String(selected.staffReports?.length || 1)} />
                 <Info label="Multas" value={`$ ${formatNumber(selected.fineAmount)}`} />
                 <Info label="Estado" value={statusLabel(selected.reportStatus)} />
               </div>
+
+              <section className="mt-4 rounded-lg border border-slate-200 bg-slate-50 p-4">
+                <h2 className="mb-3 font-bold text-[#173C61]">Detalle del personal</h2>
+                <div className="space-y-3">
+                  {getStaffReports(selected).map((staff) => (
+                    <details key={staff.id} className="rounded-md border border-slate-200 bg-white p-4">
+                      <summary className="cursor-pointer list-none">
+                        <div className="flex flex-col justify-between gap-2 sm:flex-row sm:items-start">
+                          <div>
+                            <h3 className="font-bold text-[#173C61]">{staff.workerName}</h3>
+                            <p className="text-sm text-slate-600">{staff.documentId || "Sin cedula"} | {staff.position || "Sin cargo"} | {attendanceLabel(staff.attendanceStatus)}</p>
+                          </div>
+                          <p className="text-sm font-bold text-[#173C61]">{formatNumber(staff.totalHours)} h</p>
+                        </div>
+                      </summary>
+                      <div className="mt-4 grid gap-3 sm:grid-cols-4">
+                        <Info label="Entrada" value={staff.startTime || "Sin hora"} />
+                        <Info label="Salida" value={staff.endTime || "Sin hora"} />
+                        <Info label="Normales" value={formatNumber(staff.normalHours)} />
+                        <Info label="Extras" value={formatNumber(staff.overtimeHours)} />
+                        <Info label="Atraso" value={`${staff.delayMinutes || 0} min`} />
+                        <Info label="Multa" value={`$ ${formatNumber(staff.fineAmount)}`} />
+                        <Info label="Permiso" value={formatNumber(staff.permissionHours)} />
+                        <Info label="Novedad" value={staff.notes || "Sin novedad"} />
+                      </div>
+                    </details>
+                  ))}
+                </div>
+              </section>
 
               <label className="mt-4 grid gap-2 text-sm font-semibold text-slate-700">
                 Observacion de aprobacion
@@ -128,6 +159,25 @@ function formatNumber(value?: number) {
 
 function statusLabel(status?: SupervisorReport["reportStatus"]) {
   return { draft: "Borrador", submitted: "Enviado", observed: "Observado", approved: "Aprobado", rejected: "Rechazado" }[status || "draft"];
+}
+
+function getStaffReports(report: SupervisorReport) {
+  if (report.staffReports?.length) return report.staffReports;
+  return [{
+    id: report.workerId || report.workerName,
+    workerId: report.workerId || "",
+    workerName: report.workerName,
+    startTime: report.startTime,
+    endTime: report.endTime,
+    totalHours: report.totalHours,
+    normalHours: report.normalHours,
+    overtimeHours: report.overtimeHours,
+    delayMinutes: report.delayMinutes,
+    fineAmount: report.fineAmount,
+    permissionHours: report.permissionHours,
+    attendanceStatus: report.attendanceStatus,
+    notes: report.notes,
+  }];
 }
 
 function attendanceLabel(status: SupervisorReport["attendanceStatus"]) {

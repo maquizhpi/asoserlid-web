@@ -261,9 +261,9 @@ export const adminModules: AdminModule[] = [
   },
   {
     key: "supply-kits",
-    title: "Kit de insumos por cliente",
+    title: "Kit de insumos mensual",
     href: "/admin/kits-insumos",
-    description: "Productos, cantidades y frecuencia por cliente.",
+    description: "Lista mensual de insumos por contrato y lugar de trabajo.",
     collection: "supply_kits",
     status: "ready",
     required: true,

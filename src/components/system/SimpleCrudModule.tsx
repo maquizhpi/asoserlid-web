@@ -2,6 +2,7 @@
 
 import { FormEvent, useCallback, useEffect, useMemo, useState } from "react";
 import ImportCsvModal from "@/components/system/ImportCsvModal";
+import { confirmSystem, notifySystem } from "@/components/system/SystemNotifier";
 
 export type CrudField<T extends Record<string, unknown>> = {
   key: keyof T & string;
@@ -47,7 +48,6 @@ export default function SimpleCrudModule<T extends Record<string, unknown>>({
   const [items, setItems] = useState<(T & { _id?: string })[]>([]);
   const [selectedId, setSelectedId] = useState("new");
   const [form, setForm] = useState<T>(emptyItem);
-  const [status, setStatus] = useState<string | null>(null);
   const [search, setSearch] = useState("");
   const [filterValues, setFilterValues] = useState<Record<string, string>>({});
 
@@ -70,7 +70,7 @@ export default function SimpleCrudModule<T extends Record<string, unknown>>({
     const res = await fetch(endpoint, { cache: "no-store" });
     const data = await res.json().catch(() => ({}));
     if (res.ok) setItems(data.items || []);
-    if (!res.ok) setStatus(data.error || "No se pudo cargar la informacion.");
+    if (!res.ok) notifySystem(data.error || "No se pudo cargar la informacion.", { tone: "error" });
   }, [endpoint]);
 
   useEffect(() => {
@@ -83,7 +83,7 @@ export default function SimpleCrudModule<T extends Record<string, unknown>>({
 
   async function saveItem(e: FormEvent) {
     e.preventDefault();
-    setStatus("Guardando...");
+    notifySystem("Guardando registro...", { tone: "info" });
 
     const isNew = selectedId === "new";
     const res = await fetch(isNew ? endpoint : `${endpoint}/${selectedId}`, {
@@ -94,27 +94,31 @@ export default function SimpleCrudModule<T extends Record<string, unknown>>({
     const data = await res.json().catch(() => ({}));
 
     if (!res.ok) {
-      setStatus(data.error || "No se pudo guardar.");
+      notifySystem(data.error || "No se pudo guardar.", { tone: "error" });
       return;
     }
 
-    setStatus("Guardado correctamente.");
+    notifySystem("Registro guardado correctamente.", { tone: "success" });
     await loadItems();
     setSelectedId(data.item?._id || "new");
   }
 
   async function deleteItem() {
     if (selectedId === "new") return;
-    if (!window.confirm("Eliminar este registro?")) return;
+    const confirmed = await confirmSystem("Vas a eliminar este registro. Esta accion no se puede deshacer.", {
+      tone: "warning",
+      confirmLabel: "Eliminar",
+    });
+    if (!confirmed) return;
 
     const res = await fetch(`${endpoint}/${selectedId}`, { method: "DELETE" });
     const data = await res.json().catch(() => ({}));
     if (!res.ok) {
-      setStatus(data.error || "No se pudo eliminar.");
+      notifySystem(data.error || "No se pudo eliminar.", { tone: "error" });
       return;
     }
 
-    setStatus("Registro eliminado.");
+    notifySystem("Registro eliminado correctamente.", { tone: "success" });
     setSelectedId("new");
     await loadItems();
   }
@@ -124,23 +128,21 @@ export default function SimpleCrudModule<T extends Record<string, unknown>>({
   }
 
   async function uploadImage(key: keyof T & string, file: File) {
-    setStatus("Cargando imagen...");
+    notifySystem("Cargando imagen...", { tone: "info" });
     const body = new FormData();
     body.append("file", file);
     const res = await fetch("/api/admin/uploads", { method: "POST", body });
     const data = await res.json().catch(() => ({}));
     if (!res.ok) {
-      setStatus(data.error || "No se pudo cargar la imagen.");
+      notifySystem(data.error || "No se pudo cargar la imagen.", { tone: "error" });
       return;
     }
     updateField(key, data.imageUrl);
-    setStatus("Imagen cargada. Guarda el registro para conservar el cambio.");
+    notifySystem("Imagen cargada. Guarda el registro para conservar el cambio.", { tone: "success" });
   }
 
   return (
     <>
-      {status && <p className="mb-5 rounded-md border border-slate-200 bg-white px-4 py-3 text-sm text-slate-700">{status}</p>}
-
       <section className="grid gap-6 lg:grid-cols-[0.75fr_1.25fr]">
         <aside className="rounded-lg border border-slate-200 bg-white p-4 shadow-sm">
           <div className="mb-4 grid gap-2">

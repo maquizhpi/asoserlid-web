@@ -11,7 +11,10 @@ type BaseDocument<T> = Omit<T, "_id" | "createdAt" | "updatedAt"> & {
 };
 
 const text = (message: string) => z.string().min(2, message).trim();
-const optionalText = z.string().trim().optional().or(z.literal(""));
+const optionalText = z.preprocess(
+  (value) => (value === null || value === undefined ? undefined : value),
+  z.string().trim().optional().or(z.literal(""))
+);
 const idText = z.string().trim().default("");
 const optionalNumber = z.preprocess(
   (value) => (value === "" || value === null || value === undefined ? undefined : value),
@@ -141,8 +144,29 @@ export const contractSchema = z.object({
 
 type ContractInput = z.infer<typeof contractSchema>;
 
+const supervisorReportStaffSchema = z.object({
+  id: idText,
+  workerId: text("El trabajador es obligatorio."),
+  workerName: text("El trabajador es obligatorio."),
+  documentId: optionalText,
+  position: optionalText,
+  startTime: optionalText,
+  endTime: optionalText,
+  totalHours: optionalNumber,
+  normalHours: optionalNumber,
+  overtimeHours: optionalNumber,
+  authorizedOvertimeHours: optionalNumber,
+  delayMinutes: optionalNumber,
+  fineAmount: optionalNumber,
+  permissionHours: optionalNumber,
+  sicknessHours: optionalNumber,
+  attendanceStatus: z.enum(["attended", "absent", "permission", "sick", "late", "replacement"]),
+  notes: optionalText,
+}).strip();
+
 export const supervisorReportSchema = z.object({
   date: z.string().min(10, "La fecha es obligatoria.").trim(),
+  period: optionalText,
   supervisorId: optionalText,
   supervisor: text("El supervisor es obligatorio."),
   workerId: optionalText,
@@ -150,6 +174,13 @@ export const supervisorReportSchema = z.object({
   clientId: optionalText,
   clientName: text("El cliente es obligatorio."),
   contractId: optionalText,
+  contractName: optionalText,
+  workplaceId: optionalText,
+  workplaceName: optionalText,
+  areaId: optionalText,
+  areaName: optionalText,
+  shiftId: optionalText,
+  shiftName: optionalText,
   workGroupId: optionalText,
   workGroupName: optionalText,
   startTime: optionalText,
@@ -166,6 +197,7 @@ export const supervisorReportSchema = z.object({
   reportStatus: z.enum(["draft", "submitted", "observed", "approved", "rejected"]).default("draft"),
   approvalNotes: optionalText,
   notes: optionalText,
+  staffReports: z.array(supervisorReportStaffSchema).default([]),
 }).strip();
 
 export const workerIntakeSchema = z.object({
@@ -206,12 +238,15 @@ const supplyKitItemSchema = z.object({
 }).strip();
 
 export const supplyKitSchema = z.object({
+  kitCode: optionalText,
   clientId: optionalText,
   clientName: text("El cliente es obligatorio."),
   contractId: optionalText,
   contractName: optionalText,
   workplaceId: optionalText,
   workplaceName: optionalText,
+  supervisorId: optionalText,
+  supervisorName: optionalText,
   productId: optionalText,
   productCode: optionalText,
   productCategory: optionalText,
@@ -525,7 +560,14 @@ export async function ensureDefaultServiceTypes() {
 }
 
 export function getOperationsErrorMessage(error: unknown) {
-  if (error instanceof z.ZodError) return error.issues.map((issue) => issue.message).join(" ");
+  if (error instanceof z.ZodError) {
+    return error.issues
+      .map((issue) => {
+        const field = issue.path.length ? `${issue.path.join(".")}: ` : "";
+        return `${field}${issue.message}`;
+      })
+      .join(" ");
+  }
   if (error instanceof Error) return error.message;
   return "No se pudo completar la accion.";
 }

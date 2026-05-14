@@ -299,6 +299,7 @@ export type AssignedContractStaff = {
 export type SupervisorReport = {
   _id?: string;
   date: string;
+  period?: string;
   supervisorId?: string;
   supervisor: string;
   workerId?: string;
@@ -306,6 +307,13 @@ export type SupervisorReport = {
   clientId?: string;
   clientName: string;
   contractId?: string;
+  contractName?: string;
+  workplaceId?: string;
+  workplaceName?: string;
+  areaId?: string;
+  areaName?: string;
+  shiftId?: string;
+  shiftName?: string;
   workGroupId?: string;
   workGroupName?: string;
   startTime?: string;
@@ -322,18 +330,42 @@ export type SupervisorReport = {
   reportStatus?: "draft" | "submitted" | "observed" | "approved" | "rejected";
   approvalNotes?: string;
   notes?: string;
+  staffReports?: SupervisorReportStaff[];
   createdAt?: string;
   updatedAt?: string;
 };
 
+export type SupervisorReportStaff = {
+  id: string;
+  workerId: string;
+  workerName: string;
+  documentId?: string;
+  position?: string;
+  startTime?: string;
+  endTime?: string;
+  totalHours?: number;
+  normalHours?: number;
+  overtimeHours?: number;
+  authorizedOvertimeHours?: number;
+  delayMinutes?: number;
+  fineAmount?: number;
+  permissionHours?: number;
+  sicknessHours?: number;
+  attendanceStatus: "attended" | "absent" | "permission" | "sick" | "late" | "replacement";
+  notes?: string;
+};
+
 export type SupplyKit = {
   _id?: string;
+  kitCode?: string;
   clientId?: string;
   clientName: string;
   contractId?: string;
   contractName?: string;
   workplaceId?: string;
   workplaceName?: string;
+  supervisorId?: string;
+  supervisorName?: string;
   productId?: string;
   productCode?: string;
   productCategory?: string;

@@ -1,6 +1,7 @@
 "use client";
 
 import { FormEvent, useEffect, useMemo, useState } from "react";
+import Link from "next/link";
 import SearchableSelect, { type SelectOption } from "@/components/system/SearchableSelect";
 import SystemModulePage from "@/components/system/SystemModulePage";
 import type {
@@ -11,6 +12,9 @@ import type {
   ContractWorkplace,
   ServiceContract,
   ServiceType,
+  SupplyKit,
+  SupplyKitItem,
+  SupplyProduct,
   Worker,
   WorkGroup,
 } from "@/types/admin";
@@ -46,6 +50,7 @@ type ModalState =
   | { type: "area"; workplaceId: string; area?: ContractArea }
   | { type: "shift"; workplaceId: string; areaId: string; shift?: ContractShift }
   | { type: "staff"; workplaceId: string; areaId: string; shiftId: string }
+  | { type: "kit"; kit: SupplyKit }
   | null;
 
 export default function ContractsShiftsPage() {
@@ -54,6 +59,8 @@ export default function ContractsShiftsPage() {
   const [serviceTypes, setServiceTypes] = useState<SelectOption[]>([]);
   const [groups, setGroups] = useState<SelectOption[]>([]);
   const [supervisors, setSupervisors] = useState<SelectOption[]>([]);
+  const [kits, setKits] = useState<SupplyKit[]>([]);
+  const [products, setProducts] = useState<SupplyProduct[]>([]);
   const [workers, setWorkers] = useState<Worker[]>([]);
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const [form, setForm] = useState<ServiceContract>(emptyContract);
@@ -85,13 +92,15 @@ export default function ContractsShiftsPage() {
   }, [contracts, selectedContract]);
 
   async function loadData() {
-    const [contractsRes, clientsRes, serviceTypesRes, groupsRes, workersRes, supervisorsRes] = await Promise.all([
+    const [contractsRes, clientsRes, serviceTypesRes, groupsRes, workersRes, supervisorsRes, kitsRes, productsRes] = await Promise.all([
       fetch("/api/admin/contracts", { cache: "no-store" }),
       fetch("/api/admin/clients", { cache: "no-store" }),
       fetch("/api/admin/service-types", { cache: "no-store" }),
       fetch("/api/admin/work-groups", { cache: "no-store" }),
       fetch("/api/admin/workers", { cache: "no-store" }),
       fetch("/api/admin/supervisors", { cache: "no-store" }),
+      fetch("/api/admin/supply-kits", { cache: "no-store" }),
+      fetch("/api/admin/supply-products", { cache: "no-store" }),
     ]);
     const contractsData = await contractsRes.json().catch(() => ({}));
     const clientsData = await clientsRes.json().catch(() => ({}));
@@ -99,6 +108,8 @@ export default function ContractsShiftsPage() {
     const groupsData = await groupsRes.json().catch(() => ({}));
     const workersData = await workersRes.json().catch(() => ({}));
     const supervisorsData = await supervisorsRes.json().catch(() => ({}));
+    const kitsData = await kitsRes.json().catch(() => ({}));
+    const productsData = await productsRes.json().catch(() => ({}));
 
     if (contractsRes.ok) setContracts((contractsData.items || []).map(normalizeContract));
     if (clientsRes.ok) setClients(((clientsData.items || []) as Client[]).map((client) => ({ value: client._id || "", label: client.name })));
@@ -112,8 +123,10 @@ export default function ContractsShiftsPage() {
     if (groupsRes.ok) setGroups(((groupsData.items || []) as WorkGroup[]).map((group) => ({ value: group._id || "", label: group.name })));
     if (workersRes.ok) setWorkers(workersData.items || []);
     if (supervisorsRes.ok) setSupervisors((supervisorsData.items || []).map((item: { id: string; name: string }) => ({ value: item.id, label: item.name })));
-    if (!contractsRes.ok || !clientsRes.ok || !serviceTypesRes.ok || !groupsRes.ok || !workersRes.ok || !supervisorsRes.ok) {
-      setStatus(contractsData.error || clientsData.error || serviceTypesData.error || groupsData.error || workersData.error || supervisorsData.error || "No se pudo cargar contratos.");
+    if (kitsRes.ok) setKits(kitsData.items || []);
+    if (productsRes.ok) setProducts(productsData.items || []);
+    if (!contractsRes.ok || !clientsRes.ok || !serviceTypesRes.ok || !groupsRes.ok || !workersRes.ok || !supervisorsRes.ok || !kitsRes.ok || !productsRes.ok) {
+      setStatus(contractsData.error || clientsData.error || serviceTypesData.error || groupsData.error || workersData.error || supervisorsData.error || kitsData.error || productsData.error || "No se pudo cargar contratos.");
     }
   }
 
@@ -273,6 +286,32 @@ export default function ContractsShiftsPage() {
     saveNested(nextForm, "Personal quitado del turno.");
   }
 
+  async function saveKit(kit: SupplyKit) {
+    if (!kit._id) return;
+    setStatus("Actualizando kit de insumos...");
+    const totalItems = (kit.items || []).reduce((sum, item) => sum + Number(item.quantity || 0), 0);
+    const payload = {
+      ...kit,
+      productName: `${kit.items?.length || 0} insumo(s)`,
+      quantity: totalItems,
+      frequency: "Mensual",
+      kitPeriod: "",
+    };
+    const res = await fetch(`/api/admin/supply-kits/${kit._id}`, {
+      method: "PUT",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(payload),
+    });
+    const data = await res.json().catch(() => ({}));
+    if (!res.ok) {
+      setStatus(data.error || "No se pudo actualizar el kit.");
+      return;
+    }
+    setStatus("Kit de insumos actualizado correctamente.");
+    setModal(null);
+    await loadData();
+  }
+
   return (
     <SystemModulePage moduleKey="contracts-shifts">
       {status && <p className="mb-5 rounded-md border border-slate-200 bg-white px-4 py-3 text-sm text-slate-700">{status}</p>}
@@ -313,7 +352,10 @@ export default function ContractsShiftsPage() {
           {form._id || form.clientName ? (
             <HierarchySection
               contract={form}
+              kits={kits}
+              products={products}
               workers={workers}
+              onViewKit={(kit) => setModal({ type: "kit", kit })}
               onNewWorkplace={() => setModal({ type: "workplace" })}
               onEditWorkplace={(workplace) => setModal({ type: "workplace", workplace })}
               onDeleteWorkplace={deleteWorkplace}
@@ -361,6 +403,14 @@ export default function ContractsShiftsPage() {
           workers={workers}
           onClose={() => setModal(null)}
           onAssign={(worker) => assignWorker(modal.workplaceId, modal.areaId, modal.shiftId, worker)}
+        />
+      )}
+      {modal?.type === "kit" && (
+        <KitModal
+          kit={modal.kit}
+          products={products}
+          onClose={() => setModal(null)}
+          onSave={saveKit}
         />
       )}
     </SystemModulePage>
@@ -411,6 +461,8 @@ function ContractGeneralForm({
 
 function HierarchySection({
   contract,
+  kits,
+  products,
   onNewWorkplace,
   onEditWorkplace,
   onDeleteWorkplace,
@@ -422,8 +474,11 @@ function HierarchySection({
   onDeleteShift,
   onAssignStaff,
   onRemoveStaff,
+  onViewKit,
 }: {
   contract: ServiceContract;
+  kits: SupplyKit[];
+  products: SupplyProduct[];
   workers: Worker[];
   onNewWorkplace: () => void;
   onEditWorkplace: (workplace: ContractWorkplace) => void;
@@ -436,7 +491,9 @@ function HierarchySection({
   onDeleteShift: (workplaceId: string, areaId: string, shiftId: string) => void;
   onAssignStaff: (workplaceId: string, areaId: string, shiftId: string) => void;
   onRemoveStaff: (workplaceId: string, areaId: string, shiftId: string, staffId: string) => void;
+  onViewKit: (kit: SupplyKit) => void;
 }) {
+  void products;
   return (
     <section className="rounded-lg border border-slate-200 bg-white p-5 shadow-sm">
       <div className="mb-4 flex flex-col justify-between gap-3 sm:flex-row sm:items-center">
@@ -445,15 +502,41 @@ function HierarchySection({
       </div>
 
       <div className="space-y-4">
-        {(contract.workplaces || []).map((workplace) => (
-          <details key={workplace.id} className="rounded-lg border border-slate-200 bg-slate-50 p-4" open>
+        {(contract.workplaces || []).map((workplace) => {
+          const kit = kits.find((item) => item.contractId === contract._id && item.workplaceId === workplace.id);
+          return (
+          <details key={workplace.id} className="rounded-lg border border-slate-200 bg-slate-50 p-4">
             <summary className="cursor-pointer list-none">
               <div className="flex flex-col justify-between gap-3 sm:flex-row sm:items-start">
                 <div>
                   <h3 className="font-bold text-[#173C61]">{workplace.name}</h3>
                   <p className="text-sm text-slate-600">{workplace.address || "Sin direccion"} | {workplace.supervisorName || "Sin supervisor"}</p>
+                  <p className="mt-1 text-xs font-semibold uppercase tracking-[0.08em] text-slate-500">
+                    {workplace.areas.length} areas | {countWorkplaceShifts(workplace)} turnos | {countWorkplaceStaff(workplace)} trabajadores
+                  </p>
+                  <p className="mt-1 text-xs font-semibold uppercase tracking-[0.08em] text-slate-500">
+                    Kit mensual: {kit?.kitCode || "sin asignar"}
+                  </p>
                 </div>
-                <ActionButtons onEdit={() => onEditWorkplace(workplace)} onDelete={() => onDeleteWorkplace(workplace.id)} />
+                <div className="flex flex-wrap gap-2">
+                  {kit ? (
+                    <button
+                      type="button"
+                      onClick={() => onViewKit(kit)}
+                      className="rounded-md border border-slate-300 bg-white px-3 py-2 text-sm font-semibold text-[#173C61] hover:bg-slate-100"
+                    >
+                      Ver kit
+                    </button>
+                  ) : (
+                    <Link
+                      href={`/admin/kits-insumos?contractId=${encodeURIComponent(contract._id || "")}&workplaceId=${encodeURIComponent(workplace.id)}`}
+                      className="rounded-md border border-slate-300 bg-white px-3 py-2 text-sm font-semibold text-[#173C61] hover:bg-slate-100"
+                    >
+                      Asignar kit de insumos
+                    </Link>
+                  )}
+                  <ActionButtons onEdit={() => onEditWorkplace(workplace)} onDelete={() => onDeleteWorkplace(workplace.id)} />
+                </div>
               </div>
             </summary>
 
@@ -462,12 +545,15 @@ function HierarchySection({
                 <button onClick={() => onNewArea(workplace.id)} className="rounded-md border border-slate-300 bg-white px-3 py-2 text-sm font-semibold text-[#173C61] hover:bg-slate-100">Agregar area</button>
               </div>
               {workplace.areas.map((area) => (
-                <details key={area.id} className="rounded-md border border-slate-200 bg-white p-4" open>
+                <details key={area.id} className="rounded-md border border-slate-200 bg-white p-4">
                   <summary className="cursor-pointer list-none">
                     <div className="flex flex-col justify-between gap-3 sm:flex-row sm:items-start">
                       <div>
                         <h4 className="font-bold text-[#173C61]">{area.name}</h4>
                         <p className="text-sm text-slate-600">{area.areaType || "Sin tipo"} | {area.cleaningFrequency || "Sin frecuencia"} | {area.internalLocation || "Sin ubicacion"}</p>
+                        <p className="mt-1 text-xs font-semibold uppercase tracking-[0.08em] text-slate-500">
+                          {area.shifts.length} turnos | {countAreaStaff(area)} trabajadores
+                        </p>
                       </div>
                       <ActionButtons onEdit={() => onEditArea(workplace.id, area)} onDelete={() => onDeleteArea(workplace.id, area.id)} />
                     </div>
@@ -478,12 +564,15 @@ function HierarchySection({
                       <button onClick={() => onNewShift(workplace.id, area.id)} className="rounded-md border border-slate-300 bg-slate-50 px-3 py-2 text-sm font-semibold text-[#173C61] hover:bg-slate-100">Agregar horario / turno</button>
                     </div>
                     {area.shifts.map((shift) => (
-                      <details key={shift.id} className="rounded-md border border-slate-200 bg-slate-50 p-4" open>
+                      <details key={shift.id} className="rounded-md border border-slate-200 bg-slate-50 p-4">
                         <summary className="cursor-pointer list-none">
                           <div className="flex flex-col justify-between gap-3 sm:flex-row sm:items-start">
                             <div>
                               <h5 className="font-bold text-[#173C61]">{shift.shiftName}</h5>
                               <p className="text-sm text-slate-600">{shift.startTime} a {shift.endTime} | {formatDays(shift.workDays)}</p>
+                              <p className="mt-1 text-xs font-semibold uppercase tracking-[0.08em] text-slate-500">
+                                {shift.assignedStaff.length} trabajadores asignados
+                              </p>
                             </div>
                             <ActionButtons onEdit={() => onEditShift(workplace.id, area.id, shift)} onDelete={() => onDeleteShift(workplace.id, area.id, shift.id)} />
                           </div>
@@ -505,7 +594,8 @@ function HierarchySection({
               {workplace.areas.length === 0 && <EmptyText text="Sin areas registradas." />}
             </div>
           </details>
-        ))}
+          );
+        })}
         {(!contract.workplaces || contract.workplaces.length === 0) && <EmptyText text="Sin lugares de trabajo registrados." />}
       </div>
     </section>
@@ -584,6 +674,162 @@ function StaffModal({ workers, onAssign, onClose }: { workers: Worker[]; onAssig
   );
 }
 
+function KitModal({
+  kit,
+  products,
+  onSave,
+  onClose,
+}: {
+  kit: SupplyKit;
+  products: SupplyProduct[];
+  onSave: (kit: SupplyKit) => void;
+  onClose: () => void;
+}) {
+  const [form, setForm] = useState<SupplyKit>({ ...kit, items: kit.items || [] });
+  const [itemForm, setItemForm] = useState<SupplyKitItem>({ id: "", productId: "", productCode: "", productName: "", productCategory: "", unit: "", quantity: 1 });
+  const [message, setMessage] = useState("");
+  const productOptions = products
+    .filter((product) => product.status === "active")
+    .map((product) => ({ value: product._id || product.code, label: `${product.code} - ${product.name} | ${product.category}` }));
+  const totalItems = (form.items || []).reduce((sum, item) => sum + Number(item.quantity || 0), 0);
+
+  function addItem() {
+    if (!itemForm.productName || Number(itemForm.quantity || 0) <= 0) {
+      setMessage("Selecciona un insumo y una cantidad mayor a cero.");
+      return;
+    }
+    const exists = (form.items || []).some((item) => (item.productId || item.productCode) === (itemForm.productId || itemForm.productCode));
+    if (exists) {
+      setMessage("Ese insumo ya esta en el kit. Ajusta su cantidad o quitalo antes de volver a agregarlo.");
+      return;
+    }
+    setForm((current) => ({ ...current, items: [...(current.items || []), { ...itemForm, id: createId() }] }));
+    setItemForm({ id: "", productId: "", productCode: "", productName: "", productCategory: "", unit: "", quantity: 1 });
+    setMessage("");
+  }
+
+  function updateItem(itemId: string, quantity: number) {
+    setForm((current) => ({
+      ...current,
+      items: (current.items || []).map((item) => item.id === itemId ? { ...item, quantity } : item),
+    }));
+  }
+
+  function removeItem(itemId: string) {
+    setForm((current) => ({ ...current, items: (current.items || []).filter((item) => item.id !== itemId) }));
+  }
+
+  return (
+    <div className="fixed inset-0 z-50 grid place-items-center bg-slate-950/50 px-4 py-6">
+      <section className="max-h-[92vh] w-full max-w-5xl overflow-auto rounded-lg border border-slate-200 bg-white p-5 shadow-xl">
+        <div className="mb-4 flex flex-col justify-between gap-3 sm:flex-row sm:items-start">
+          <div>
+            <h2 className="text-xl font-bold text-[#173C61]">Kit de insumos mensual</h2>
+            <p className="mt-1 text-sm text-slate-600">{form.kitCode || "Sin codigo"} | {form.clientName} | {form.workplaceName}</p>
+          </div>
+          <button onClick={onClose} className="rounded-md border border-slate-200 px-3 py-2 text-sm font-bold text-slate-600 hover:bg-slate-50">Cerrar</button>
+        </div>
+
+        {message && <p className="mb-4 rounded-md border border-amber-200 bg-amber-50 px-4 py-3 text-sm font-semibold text-amber-800">{message}</p>}
+
+        <div className="grid gap-4 sm:grid-cols-2">
+          <InfoBox label="Codigo" value={form.kitCode || "Sin codigo"} />
+          <InfoBox label="Frecuencia" value="Mensual" />
+          <InfoBox label="Contrato" value={form.contractName || form.clientName} />
+          <InfoBox label="Lugar de trabajo" value={form.workplaceName || "Sin lugar"} />
+          <InfoBox label="Supervisor" value={form.supervisorName || "Sin supervisor"} />
+          <InfoBox label="Total referencial" value={`${totalItems} unidades`} />
+        </div>
+
+        <section className="mt-5 rounded-lg border border-slate-200 p-4">
+          <div className="mb-4 flex flex-col justify-between gap-3 sm:flex-row sm:items-center">
+            <h3 className="font-bold text-[#173C61]">Lista de insumos</h3>
+            <button type="button" onClick={() => printKit(form)} className="rounded-md border border-slate-300 bg-white px-4 py-2 text-sm font-bold text-[#173C61] hover:bg-slate-50">
+              Imprimir kit
+            </button>
+          </div>
+
+          <div className="mb-4 grid gap-3 lg:grid-cols-[1fr_8rem_auto]">
+            <SearchableSelect
+              label="Producto disponible"
+              value={itemForm.productId || itemForm.productCode || ""}
+              options={productOptions}
+              placeholder="Buscar insumo..."
+              onChange={(option) => {
+                const product = products.find((item) => (item._id || item.code) === option?.value);
+                setItemForm({
+                  id: "",
+                  productId: product?._id || "",
+                  productCode: product?.code || "",
+                  productName: product?.name || "",
+                  productCategory: product?.category || "",
+                  unit: product?.unit || "",
+                  quantity: 1,
+                });
+              }}
+            />
+            <Field label="Cantidad">
+              <input type="number" min="0.01" step="0.01" className={inputClass} value={itemForm.quantity} onChange={(event) => setItemForm({ ...itemForm, quantity: Number(event.target.value) })} />
+            </Field>
+            <div className="flex items-end">
+              <button type="button" onClick={addItem} className="rounded-md bg-[#173C61] px-4 py-3 text-sm font-bold text-white hover:bg-[#218F93]">Agregar</button>
+            </div>
+          </div>
+
+          <div className="overflow-hidden rounded-md border border-slate-200">
+            <table className="w-full text-left text-sm">
+              <thead className="bg-slate-50 text-xs uppercase text-slate-500">
+                <tr>
+                  <th className="px-3 py-2">Codigo</th>
+                  <th className="px-3 py-2">Nombre de producto</th>
+                  <th className="px-3 py-2">Tipo</th>
+                  <th className="px-3 py-2">Cantidad</th>
+                  <th className="px-3 py-2 text-right">Quitar</th>
+                </tr>
+              </thead>
+              <tbody>
+                {(form.items || []).map((item) => (
+                  <tr key={item.id} className="border-t border-slate-100">
+                    <td className="px-3 py-2 font-bold text-[#173C61]">{item.productCode}</td>
+                    <td className="px-3 py-2">{item.productName}</td>
+                    <td className="px-3 py-2">{item.productCategory}</td>
+                    <td className="px-3 py-2">
+                      <input type="number" min="0.01" step="0.01" className="w-28 rounded-md border border-slate-300 px-3 py-2" value={item.quantity} onChange={(event) => updateItem(item.id, Number(event.target.value))} />
+                      <span className="ml-2 text-xs font-semibold text-slate-500">{item.unit}</span>
+                    </td>
+                    <td className="px-3 py-2 text-right">
+                      <button type="button" className="font-bold text-red-700 hover:text-red-900" onClick={() => removeItem(item.id)}>Quitar</button>
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        </section>
+
+        <label className="mt-4 grid gap-2 text-sm font-semibold text-slate-700">
+          Observaciones
+          <textarea className={`${inputClass} min-h-24`} value={form.notes || ""} onChange={(event) => setForm({ ...form, notes: event.target.value })} />
+        </label>
+
+        <div className="mt-5 flex flex-wrap justify-end gap-3">
+          <button type="button" onClick={() => printKit(form)} className="rounded-md border border-slate-300 bg-white px-5 py-3 font-bold text-[#173C61] hover:bg-slate-50">Imprimir</button>
+          <button type="button" onClick={() => onSave(form)} className="rounded-md bg-[#173C61] px-5 py-3 font-bold text-white hover:bg-[#218F93]">Actualizar kit</button>
+        </div>
+      </section>
+    </div>
+  );
+}
+
+function InfoBox({ label, value }: { label: string; value: string }) {
+  return (
+    <div className="rounded-md border border-slate-200 bg-slate-50 p-3">
+      <p className="text-xs font-bold uppercase tracking-[0.1em] text-slate-500">{label}</p>
+      <p className="mt-1 font-semibold text-[#173C61]">{value || "Sin dato"}</p>
+    </div>
+  );
+}
+
 function Modal({ title, children, onClose, onSubmit }: { title: string; children: React.ReactNode; onClose: () => void; onSubmit: () => void }) {
   return (
     <div className="fixed inset-0 z-50 grid place-items-center bg-slate-950/50 px-4">
@@ -643,6 +889,18 @@ function Field({ label, children }: { label: string; children: React.ReactNode }
 
 function EmptyText({ text }: { text: string }) {
   return <p className="rounded-md border border-dashed border-slate-300 bg-white px-4 py-3 text-sm text-slate-500">{text}</p>;
+}
+
+function countWorkplaceShifts(workplace: ContractWorkplace) {
+  return workplace.areas.reduce((total, area) => total + area.shifts.length, 0);
+}
+
+function countWorkplaceStaff(workplace: ContractWorkplace) {
+  return workplace.areas.reduce((total, area) => total + countAreaStaff(area), 0);
+}
+
+function countAreaStaff(area: ContractArea) {
+  return area.shifts.reduce((total, shift) => total + shift.assignedStaff.length, 0);
 }
 
 function normalizeContract(contract: ServiceContract): ServiceContract {
@@ -776,6 +1034,85 @@ function getPrimaryShift(contract: ServiceContract) {
 function formatDays(values: string[]) {
   if (!values.length) return "Todos los dias";
   return days.filter((day) => values.includes(day.value)).map((day) => day.label).join(", ");
+}
+
+function printKit(kit: SupplyKit) {
+  const rows = (kit.items || [])
+    .map((item, index) => `
+      <tr>
+        <td>${index + 1}</td>
+        <td>${escapeHtml(item.productCode || "")}</td>
+        <td>${escapeHtml(item.productName || "")}</td>
+        <td>${escapeHtml(item.productCategory || "")}</td>
+        <td>${escapeHtml(`${item.quantity || 0} ${item.unit || ""}`)}</td>
+      </tr>
+    `)
+    .join("");
+  const total = (kit.items || []).reduce((sum, item) => sum + Number(item.quantity || 0), 0);
+  const html = `
+    <!doctype html>
+    <html>
+      <head>
+        <meta charset="utf-8" />
+        <title>${escapeHtml(kit.kitCode || "Kit de insumos mensual")}</title>
+        <style>
+          body { font-family: Arial, sans-serif; color: #0f2742; margin: 32px; }
+          h1 { margin: 0 0 6px; font-size: 22px; }
+          p { margin: 4px 0; }
+          .meta { display: grid; grid-template-columns: 1fr 1fr; gap: 8px 24px; margin: 22px 0; font-size: 13px; }
+          .box { border: 1px solid #cbd5e1; padding: 10px; }
+          .label { display: block; color: #64748b; font-size: 10px; font-weight: 700; letter-spacing: .08em; text-transform: uppercase; }
+          table { border-collapse: collapse; width: 100%; margin-top: 18px; font-size: 12px; }
+          th, td { border: 1px solid #cbd5e1; padding: 8px; text-align: left; vertical-align: top; }
+          th { background: #f1f5f9; color: #173C61; text-transform: uppercase; font-size: 10px; }
+          .total { margin-top: 12px; font-weight: 700; text-align: right; }
+          .signatures { display: grid; grid-template-columns: repeat(3, 1fr); gap: 28px; margin-top: 82px; }
+          .signature { text-align: center; font-size: 12px; }
+          .line { border-top: 1px solid #0f2742; margin-bottom: 8px; }
+          @media print { body { margin: 18mm; } button { display: none; } }
+        </style>
+      </head>
+      <body>
+        <h1>Kit de insumos mensual</h1>
+        <p><strong>Codigo:</strong> ${escapeHtml(kit.kitCode || "Sin codigo")}</p>
+        <p><strong>Frecuencia:</strong> Mensual</p>
+        <section class="meta">
+          <div class="box"><span class="label">Cliente</span>${escapeHtml(kit.clientName || "")}</div>
+          <div class="box"><span class="label">Contrato</span>${escapeHtml(kit.contractName || kit.clientName || "")}</div>
+          <div class="box"><span class="label">Lugar de trabajo</span>${escapeHtml(kit.workplaceName || "")}</div>
+          <div class="box"><span class="label">Supervisor</span>${escapeHtml(kit.supervisorName || "")}</div>
+        </section>
+        <table>
+          <thead>
+            <tr><th>Orden</th><th>Codigo</th><th>Nombre de producto</th><th>Tipo</th><th>Cantidad</th></tr>
+          </thead>
+          <tbody>${rows || '<tr><td colspan="5">Sin insumos registrados.</td></tr>'}</tbody>
+        </table>
+        <p class="total">Total referencial: ${escapeHtml(String(total))}</p>
+        ${kit.notes ? `<p><strong>Observaciones:</strong> ${escapeHtml(kit.notes)}</p>` : ""}
+        <section class="signatures">
+          <div class="signature"><div class="line"></div>Supervisor</div>
+          <div class="signature"><div class="line"></div>Auxiliar de limpieza</div>
+          <div class="signature"><div class="line"></div>Quien recibe</div>
+        </section>
+        <script>window.print();</script>
+      </body>
+    </html>
+  `;
+  const popup = window.open("", "_blank", "width=960,height=720");
+  if (!popup) return;
+  popup.document.open();
+  popup.document.write(html);
+  popup.document.close();
+}
+
+function escapeHtml(value: string) {
+  return value
+    .replaceAll("&", "&amp;")
+    .replaceAll("<", "&lt;")
+    .replaceAll(">", "&gt;")
+    .replaceAll('"', "&quot;")
+    .replaceAll("'", "&#039;");
 }
 
 function createId() {

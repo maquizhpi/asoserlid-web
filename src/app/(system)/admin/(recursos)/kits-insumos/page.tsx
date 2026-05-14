@@ -3,6 +3,7 @@
 import { FormEvent, useCallback, useEffect, useMemo, useState } from "react";
 import SearchableSelect from "@/components/system/SearchableSelect";
 import SystemModulePage from "@/components/system/SystemModulePage";
+import { confirmSystem, notifySystem } from "@/components/system/SystemNotifier";
 import type { Client, ServiceContract, SupplyKit, SupplyKitItem, SupplyProduct } from "@/types/admin";
 
 const inputClass =
@@ -12,17 +13,20 @@ const secondaryButtonClass = "rounded-md border border-slate-300 bg-white px-4 p
 const dangerButtonClass = "rounded-md border border-red-200 bg-white px-4 py-3 text-sm font-bold text-red-600 transition hover:bg-red-50";
 
 const emptyKit: SupplyKit = {
+  kitCode: "",
   clientId: "",
   clientName: "",
   contractId: "",
   contractName: "",
   workplaceId: "",
   workplaceName: "",
+  supervisorId: "",
+  supervisorName: "",
   productName: "Kit mensual",
   items: [],
   quantity: 0,
   frequency: "Mensual",
-  kitPeriod: new Date().toISOString().slice(0, 7),
+  kitPeriod: "",
   notes: "",
   status: "active",
 };
@@ -45,6 +49,8 @@ type WorkplaceOption = {
   contractName: string;
   workplaceId: string;
   workplaceName: string;
+  supervisorId?: string;
+  supervisorName?: string;
   clientId?: string;
   clientName: string;
 };
@@ -57,7 +63,6 @@ export default function SupplyKitsPage() {
   const [selectedId, setSelectedId] = useState("new");
   const [form, setForm] = useState<SupplyKit>(emptyKit);
   const [itemForm, setItemForm] = useState<SupplyKitItem>(emptyKitItem);
-  const [status, setStatus] = useState<string | null>(null);
   const [search, setSearch] = useState("");
   const [statusFilter, setStatusFilter] = useState("");
 
@@ -81,13 +86,42 @@ export default function SupplyKitsPage() {
     if (contractsRes.ok) setContracts(contractsData.items || []);
     if (productsRes.ok) setProducts(productsData.items || []);
     if (!kitsRes.ok || !clientsRes.ok || !contractsRes.ok || !productsRes.ok) {
-      setStatus("No se pudo cargar toda la informacion de kits, clientes, contratos o productos.");
+      notifySystem("No se pudo cargar toda la informacion de kits, clientes, contratos o productos.", { tone: "error" });
     }
   }, []);
 
   useEffect(() => {
     loadData();
   }, [loadData]);
+
+  useEffect(() => {
+    const params = new URLSearchParams(window.location.search);
+    const contractId = params.get("contractId");
+    const workplaceId = params.get("workplaceId");
+    if (!contractId || !workplaceId || !contracts.length) return;
+
+    const existing = kits.find((kit) => kit.contractId === contractId && kit.workplaceId === workplaceId);
+    if (existing) {
+      selectKit(existing);
+      return;
+    }
+
+    const workplace = getWorkplaceOption(contracts, contractId, workplaceId);
+    if (!workplace) return;
+    setSelectedId("new");
+    setForm({
+      ...emptyKit,
+      kitCode: buildKitCode(workplace.clientName, workplace.workplaceName),
+      clientId: workplace.clientId || "",
+      clientName: workplace.clientName,
+      contractId: workplace.contractId,
+      contractName: workplace.contractName,
+      workplaceId: workplace.workplaceId,
+      workplaceName: workplace.workplaceName,
+      supervisorId: workplace.supervisorId || "",
+      supervisorName: workplace.supervisorName || "",
+    });
+  }, [contracts, kits]);
 
   const clientOptions = useMemo(
     () => clients.map((client) => ({ value: client._id || client.name, label: `${client.name} (${client.taxId})` })),
@@ -110,6 +144,8 @@ export default function SupplyKitsPage() {
           contractName: `${contract.clientName} - ${contract.serviceType}`,
           workplaceId: workplace.id,
           workplaceName: workplace.name,
+          supervisorId: workplace.supervisorId,
+          supervisorName: workplace.supervisorName,
           clientId: contract.clientId,
           clientName: contract.clientName,
         }))
@@ -130,9 +166,8 @@ export default function SupplyKitsPage() {
 
   function newKit() {
     setSelectedId("new");
-    setForm(emptyKit);
+    setForm({ ...emptyKit, kitCode: buildKitCode() });
     setItemForm(emptyKitItem);
-    setStatus(null);
   }
 
   function selectKit(kit: SupplyKit) {
@@ -143,20 +178,19 @@ export default function SupplyKitsPage() {
 
   function addItemToKit() {
     if (!itemForm.productName || Number(itemForm.quantity) <= 0) {
-      setStatus("Selecciona un insumo y una cantidad mayor a cero.");
+      notifySystem("Selecciona un insumo y una cantidad mayor a cero.", { tone: "warning" });
       return;
     }
 
     const exists = (form.items || []).some((item) => (item.productId || item.productCode) === (itemForm.productId || itemForm.productCode));
     if (exists) {
-      setStatus("Ese insumo ya esta agregado al kit. Puedes quitarlo y volver a agregarlo con otra cantidad.");
+      notifySystem("Ese insumo ya esta agregado al kit. Puedes quitarlo y volver a agregarlo con otra cantidad.", { tone: "warning" });
       return;
     }
 
     const nextItems = [...(form.items || []), { ...itemForm, id: crypto.randomUUID() }];
     setForm({ ...form, items: nextItems, quantity: nextItems.reduce((sum, item) => sum + Number(item.quantity || 0), 0), productName: `${nextItems.length} insumo(s)` });
     setItemForm(emptyKitItem);
-    setStatus(null);
   }
 
   function removeItem(itemId: string) {
@@ -168,20 +202,23 @@ export default function SupplyKitsPage() {
     event.preventDefault();
 
     if (!form.clientName || !form.workplaceName) {
-      setStatus("Selecciona el cliente y el lugar de trabajo.");
+      notifySystem("Selecciona el cliente y el lugar de trabajo.", { tone: "warning" });
       return;
     }
 
     if (!(form.items || []).length) {
-      setStatus("Agrega al menos un insumo al kit.");
+      notifySystem("Agrega al menos un insumo al kit.", { tone: "warning" });
       return;
     }
 
-    setStatus("Guardando kit...");
+    notifySystem("Guardando kit mensual...", { tone: "info" });
     const payload = {
       ...form,
+      kitCode: form.kitCode || buildKitCode(form.clientName, form.workplaceName),
       productName: `${form.items?.length || 0} insumo(s)`,
       quantity: totalItems,
+      frequency: "Mensual",
+      kitPeriod: "",
     };
     const isNew = selectedId === "new";
     const res = await fetch(isNew ? "/api/admin/supply-kits" : `/api/admin/supply-kits/${selectedId}`, {
@@ -192,35 +229,37 @@ export default function SupplyKitsPage() {
     const data = await res.json().catch(() => ({}));
 
     if (!res.ok) {
-      setStatus(data.error || "No se pudo guardar el kit.");
+      notifySystem(data.error || "No se pudo guardar el kit.", { tone: "error" });
       return;
     }
 
-    setStatus("Kit guardado correctamente.");
+    notifySystem("Kit de insumos mensual guardado correctamente.", { tone: "success" });
     await loadData();
     setSelectedId(data.item?._id || "new");
   }
 
   async function deleteKit() {
     if (selectedId === "new") return;
-    if (!window.confirm("Eliminar este kit de insumos?")) return;
+    const confirmed = await confirmSystem("Vas a eliminar este kit de insumos mensual. Esta accion no se puede deshacer.", {
+      tone: "warning",
+      confirmLabel: "Eliminar kit",
+    });
+    if (!confirmed) return;
 
     const res = await fetch(`/api/admin/supply-kits/${selectedId}`, { method: "DELETE" });
     const data = await res.json().catch(() => ({}));
     if (!res.ok) {
-      setStatus(data.error || "No se pudo eliminar el kit.");
+      notifySystem(data.error || "No se pudo eliminar el kit.", { tone: "error" });
       return;
     }
 
-    setStatus("Kit eliminado.");
+    notifySystem("Kit eliminado correctamente.", { tone: "success" });
     newKit();
     await loadData();
   }
 
   return (
     <SystemModulePage moduleKey="supply-kits">
-      {status && <p className="mb-5 rounded-md border border-slate-200 bg-white px-4 py-3 text-sm text-[#173C61]">{status}</p>}
-
       <div className="grid gap-5 xl:grid-cols-[35rem_1fr]">
         <section className="rounded-lg border border-slate-200 bg-white p-4 shadow-sm">
           <button type="button" className={`${buttonClass} mb-4 w-full`} onClick={newKit}>
@@ -248,7 +287,7 @@ export default function SupplyKitsPage() {
               >
                 <strong className="block text-sm text-[#173C61]">{kit.clientName}</strong>
                 <span className="text-xs text-slate-600">
-                  {kit.workplaceName || "Sin lugar"} - {kit.kitPeriod || "Sin periodo"} - {(kit.items || []).length} insumo(s)
+                  {kit.kitCode || "Sin codigo"} - {kit.workplaceName || "Sin lugar"} - {(kit.items || []).length} insumo(s)
                 </span>
               </button>
             ))}
@@ -258,6 +297,16 @@ export default function SupplyKitsPage() {
 
         <form className="rounded-lg border border-slate-200 bg-white p-4 shadow-sm" onSubmit={saveKit}>
           <div className="grid gap-4 lg:grid-cols-2">
+            <label className="grid gap-2 text-sm font-semibold text-slate-700">
+              Codigo del kit
+              <input className={inputClass} value={form.kitCode || ""} onChange={(event) => setForm({ ...form, kitCode: event.target.value.toUpperCase() })} placeholder="KIT-MENSUAL-001" />
+            </label>
+
+            <label className="grid gap-2 text-sm font-semibold text-slate-700">
+              Frecuencia
+              <input className={inputClass} value="Mensual" readOnly />
+            </label>
+
             <SearchableSelect
               label="Cliente"
               value={form.clientId || form.clientName}
@@ -273,6 +322,9 @@ export default function SupplyKitsPage() {
                   contractName: "",
                   workplaceId: "",
                   workplaceName: "",
+                  supervisorId: "",
+                  supervisorName: "",
+                  kitCode: selectedId === "new" ? buildKitCode(client?.name || "") : current.kitCode,
                 }));
               }}
             />
@@ -292,13 +344,16 @@ export default function SupplyKitsPage() {
                   contractName: workplace?.contractName || "",
                   workplaceId: workplace?.workplaceId || "",
                   workplaceName: workplace?.workplaceName || "",
+                  supervisorId: workplace?.supervisorId || "",
+                  supervisorName: workplace?.supervisorName || "",
+                  kitCode: selectedId === "new" ? buildKitCode(workplace?.clientName || current.clientName, workplace?.workplaceName || "") : current.kitCode,
                 }));
               }}
             />
 
             <label className="grid gap-2 text-sm font-semibold text-slate-700">
-              Periodo mensual
-              <input className={inputClass} type="month" value={form.kitPeriod || ""} onChange={(event) => setForm({ ...form, kitPeriod: event.target.value })} />
+              Responsable del lugar
+              <input className={inputClass} value={form.supervisorName || "Sin responsable asignado"} readOnly />
             </label>
 
             <label className="grid gap-2 text-sm font-semibold text-slate-700">
@@ -350,10 +405,10 @@ export default function SupplyKitsPage() {
                 <thead className="bg-slate-50 text-xs uppercase text-slate-500">
                   <tr>
                     <th className="px-3 py-2">Codigo</th>
-                    <th className="px-3 py-2">Insumo</th>
+                    <th className="px-3 py-2">Nombre de producto</th>
                     <th className="px-3 py-2">Tipo</th>
                     <th className="px-3 py-2">Cantidad</th>
-                    <th className="px-3 py-2 text-right">Accion</th>
+                    <th className="px-3 py-2 text-right">Quitar</th>
                   </tr>
                 </thead>
                 <tbody>
@@ -395,11 +450,12 @@ export default function SupplyKitsPage() {
 }
 
 function normalizeKit(kit: SupplyKit): SupplyKit {
-  if (kit.items?.length) return kit;
-  if (!kit.productName) return { ...kit, items: [] };
+  const normalized = { ...emptyKit, ...kit, kitCode: kit.kitCode || buildKitCode(kit.clientName, kit.workplaceName), frequency: "Mensual", kitPeriod: "" };
+  if (normalized.items?.length) return normalized;
+  if (!kit.productName) return { ...normalized, items: [] };
 
   return {
-    ...kit,
+    ...normalized,
     items: [
       {
         id: crypto.randomUUID(),
@@ -412,4 +468,30 @@ function normalizeKit(kit: SupplyKit): SupplyKit {
       },
     ],
   };
+}
+
+function getWorkplaceOption(contracts: ServiceContract[], contractId: string, workplaceId: string): WorkplaceOption | null {
+  const contract = contracts.find((item) => item._id === contractId);
+  const workplace = contract?.workplaces?.find((item) => item.id === workplaceId);
+  if (!contract || !workplace) return null;
+  return {
+    value: `${contract._id || contract.clientName}-${workplace.id}`,
+    label: `${contract.clientName} / ${workplace.name}`,
+    contractId: contract._id || "",
+    contractName: `${contract.clientName} - ${contract.serviceType}`,
+    workplaceId: workplace.id,
+    workplaceName: workplace.name,
+    supervisorId: workplace.supervisorId,
+    supervisorName: workplace.supervisorName,
+    clientId: contract.clientId,
+    clientName: contract.clientName,
+  };
+}
+
+function buildKitCode(clientName = "", workplaceName = "") {
+  const seed = `${clientName}-${workplaceName}`.trim();
+  const slug = seed
+    ? seed.normalize("NFD").replace(/[\u0300-\u036f]/g, "").replace(/[^a-zA-Z0-9]+/g, "-").replace(/^-|-$/g, "").slice(0, 24).toUpperCase()
+    : String(Date.now()).slice(-6);
+  return `KIT-MEN-${slug}`;
 }

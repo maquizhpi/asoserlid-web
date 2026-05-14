@@ -34,6 +34,7 @@ import WebIcon from "@mui/icons-material/Web";
 import { adminModules } from "@/lib/adminModules";
 import { roleLabels } from "@/lib/userRoles";
 import type { UserRole } from "@/types/admin";
+import SystemNotifier from "@/components/system/SystemNotifier";
 
 type SystemShellProps = {
   title: string;
@@ -116,8 +117,6 @@ const sidebarConfig: SidebarSection[] = [
     defaultOpen: true,
     items: [
       { key: "dashboard-general", title: "Dashboard general", href: "/admin" },
-      { key: "agenda-operacional", title: "Agenda operacional", moduleKey: "process-calendar" },
-      { key: "notifications", title: "Notificaciones", moduleKey: "notifications" },
     ],
   },
   {
@@ -128,8 +127,6 @@ const sidebarConfig: SidebarSection[] = [
       { key: "blog", title: "Blog institucional", moduleKey: "blog" },
       { key: "gallery", title: "Galería", moduleKey: "gallery" },
       { key: "certifications", title: "Certificaciones", moduleKey: "certifications" },
-      { key: "published-services", title: "Servicios publicados", moduleKey: "service-types" },
-      { key: "client-experience", title: "Clientes / experiencia", href: "/admin/clientes-experiencia", disabled: true },
     ],
   },
   {
@@ -139,12 +136,8 @@ const sidebarConfig: SidebarSection[] = [
     items: [
       { key: "workers", title: "Trabajadores", moduleKey: "workers" },
       { key: "worker-intake", title: "Formulario nuevos trabajadores", moduleKey: "worker-intake" },
-      { key: "resumes", title: "Hojas de vida", moduleKey: "worker-documents" },
-      { key: "labor-contracts", title: "Contratos laborales", href: "/admin/contratos-laborales", disabled: true },
-      { key: "areas-shifts", title: "Áreas y turnos", moduleKey: "contracts-shifts" },
-      { key: "daily-attendance", title: "Asistencia diaria", moduleKey: "supervisor-daily-report" },
+      { key: "worker-documents", title: "Control documental", moduleKey: "worker-documents" },
       { key: "labor-history", title: "Historial laboral", moduleKey: "labor-history" },
-      { key: "replacements", title: "Reemplazos / novedades", href: "/admin/reemplazos-novedades", disabled: true },
     ],
   },
   {
@@ -153,11 +146,8 @@ const sidebarConfig: SidebarSection[] = [
     icon: <BusinessIcon fontSize="small" />,
     items: [
       { key: "clients", title: "Clientes", moduleKey: "clients" },
-      { key: "service-contracts", title: "Contratos de servicio", moduleKey: "contracts-shifts" },
-      { key: "workplaces", title: "Lugares / puntos de trabajo", moduleKey: "contracts-shifts" },
-      { key: "assigned-staff", title: "Personal asignado", moduleKey: "contracts-shifts" },
-      { key: "client-supply-kits", title: "Kit de insumos por cliente", moduleKey: "supply-kits" },
-      { key: "contract-documents", title: "Documentos del contrato", href: "/admin/documentos-contrato", disabled: true },
+      { key: "contracts-shifts", title: "Contratos / áreas / turnos", moduleKey: "contracts-shifts" },
+      { key: "supply-kits", title: "Kit de insumos mensual", moduleKey: "supply-kits" },
     ],
   },
   {
@@ -165,12 +155,9 @@ const sidebarConfig: SidebarSection[] = [
     title: "Operaciones",
     icon: <EngineeringIcon fontSize="small" />,
     items: [
-      { key: "operative-planning", title: "Planificación operativa", href: "/admin/planificacion-operativa", disabled: true },
-      { key: "daily-supervision", title: "Supervisión diaria", moduleKey: "supervisor-daily-report" },
       { key: "supervisor-daily-report", title: "Reporte diario del supervisor", moduleKey: "supervisor-daily-report" },
-      { key: "compliance-control", title: "Control de cumplimiento", moduleKey: "report-approvals" },
+      { key: "report-approvals", title: "Control de cumplimiento", moduleKey: "report-approvals" },
       { key: "supply-control", title: "Control de insumos", moduleKey: "supply-control" },
-      { key: "photo-evidence", title: "Evidencias fotográficas", href: "/admin/evidencias-fotograficas", disabled: true },
     ],
   },
   {
@@ -179,11 +166,7 @@ const sidebarConfig: SidebarSection[] = [
     icon: <FactCheckIcon fontSize="small" />,
     items: [
       { key: "hiring-processes", title: "Procesos de contratación", moduleKey: "hiring-processes" },
-      { key: "process-timeline", title: "Cronograma del proceso", moduleKey: "hiring-processes" },
-      { key: "process-agenda", title: "Agenda de seguimiento", moduleKey: "process-calendar" },
-      { key: "process-documents", title: "Documentos del proceso", href: "/admin/documentos-proceso", disabled: true },
-      { key: "validations", title: "Convalidaciones", href: "/admin/convalidaciones", disabled: true },
-      { key: "process-statuses", title: "Estados del proceso", moduleKey: "hiring-processes" },
+      { key: "process-calendar", title: "Calendario de procesos", moduleKey: "process-calendar" },
     ],
   },
   {
@@ -192,13 +175,7 @@ const sidebarConfig: SidebarSection[] = [
     icon: <Inventory2Icon fontSize="small" />,
     items: [
       { key: "machines", title: "Equipos de limpieza", moduleKey: "machines" },
-      { key: "machinery", title: "Maquinaria", moduleKey: "machines" },
       { key: "supply-products", title: "Productos / insumos", moduleKey: "supply-products" },
-      { key: "entries", title: "Entradas", href: "/admin/entradas-inventario", disabled: true },
-      { key: "outputs", title: "Salidas", href: "/admin/salidas-inventario", disabled: true },
-      { key: "minimum-stock", title: "Stock mínimo", href: "/admin/stock-minimo", disabled: true },
-      { key: "warehouses", title: "Bodegas", href: "/admin/bodegas", disabled: true },
-      { key: "document-control", title: "Control documental", moduleKey: "worker-documents" },
     ],
   },
   {
@@ -208,12 +185,6 @@ const sidebarConfig: SidebarSection[] = [
     items: [
       { key: "accounting", title: "Contabilidad", moduleKey: "accounting" },
       { key: "payment-calculation", title: "Cálculo de pagos", moduleKey: "payment-calculation" },
-      { key: "payroll", title: "Roles de pago", href: "/admin/roles-pago", disabled: true },
-      { key: "worked-hours", title: "Horas trabajadas", moduleKey: "payment-calculation" },
-      { key: "overtime", title: "Horas extras", moduleKey: "payment-calculation" },
-      { key: "fines-discounts", title: "Multas y descuentos", moduleKey: "accounting" },
-      { key: "contract-costs", title: "Costos por contrato", href: "/admin/costos-contrato", disabled: true },
-      { key: "billing", title: "Facturación", href: "/admin/facturacion", disabled: true },
     ],
   },
   {
@@ -223,13 +194,8 @@ const sidebarConfig: SidebarSection[] = [
     items: [
       { key: "dashboard-supervisor", title: "Dashboard supervisor", moduleKey: "dashboard-supervisor" },
       { key: "dashboard-accounting", title: "Dashboard contabilidad", moduleKey: "dashboard-accounting" },
-      { key: "worker-reports", title: "Reportes de trabajadores", moduleKey: "exports" },
-      { key: "contract-reports", title: "Reportes de contratos", moduleKey: "exports" },
-      { key: "attendance-reports", title: "Reportes de asistencia", moduleKey: "exports" },
-      { key: "supply-reports", title: "Reportes de insumos", moduleKey: "exports" },
-      { key: "payment-reports", title: "Reportes de pagos", moduleKey: "exports" },
       { key: "exports", title: "Reportes PDF / Excel", moduleKey: "exports" },
-      { key: "process-calendar", title: "Calendario de procesos", moduleKey: "process-calendar" },
+      { key: "notifications", title: "Notificaciones", moduleKey: "notifications" },
     ],
   },
   {
@@ -242,10 +208,8 @@ const sidebarConfig: SidebarSection[] = [
       { key: "work-groups", title: "Grupos de trabajo", moduleKey: "work-groups" },
       { key: "catalogs", title: "Catálogos", moduleKey: "catalogs" },
       { key: "service-types", title: "Tipos de servicios", moduleKey: "service-types" },
-      { key: "internal-areas", title: "Áreas internas", href: "/admin/areas-internas", disabled: true },
       { key: "audits", title: "Auditorías", moduleKey: "audits" },
       { key: "backups", title: "Respaldos", moduleKey: "backups" },
-      { key: "general-settings", title: "Configuración general", href: "/admin/configuraciones", disabled: true },
     ],
   },
 ];
@@ -461,6 +425,7 @@ export default function SystemShell({ title, subtitle, activeKey, children }: Sy
           <div className="px-4 py-6 sm:px-6">{children}</div>
         </section>
       </div>
+      <SystemNotifier />
     </main>
   );
 }
