@@ -2,8 +2,9 @@
 
 import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
-import { ReactNode, useEffect, useMemo, useState } from "react";
+import { FormEvent, ReactNode, useEffect, useMemo, useState } from "react";
 import AssessmentIcon from "@mui/icons-material/Assessment";
+import AccountCircleIcon from "@mui/icons-material/AccountCircle";
 import AssignmentTurnedInIcon from "@mui/icons-material/AssignmentTurnedIn";
 import BadgeIcon from "@mui/icons-material/Badge";
 import BusinessIcon from "@mui/icons-material/Business";
@@ -33,7 +34,7 @@ import WorkHistoryIcon from "@mui/icons-material/WorkHistory";
 import WebIcon from "@mui/icons-material/Web";
 import { adminModules } from "@/lib/adminModules";
 import { roleLabels } from "@/lib/userRoles";
-import type { InternalNotification, UserRole } from "@/types/admin";
+import type { AdminUser, InternalNotification, UserRole, Worker } from "@/types/admin";
 import SystemNotifier, { notifySystem } from "@/components/system/SystemNotifier";
 
 type SystemShellProps = {
@@ -48,6 +49,11 @@ type ShellUser = {
   email: string;
   roles: UserRole[];
   moduleAccess: string[];
+};
+
+type ShellProfile = {
+  user: AdminUser;
+  worker?: Worker | null;
 };
 
 type ContractExpirationAlert = {
@@ -235,6 +241,7 @@ export default function SystemShell({ title, subtitle, activeKey, children }: Sy
   const [sidebarOpen, setSidebarOpen] = useState(false);
   const [notifications, setNotifications] = useState<InternalNotification[]>([]);
   const [notificationsOpen, setNotificationsOpen] = useState(false);
+  const [profileOpen, setProfileOpen] = useState(false);
   const sidebarSections = useMemo(() => {
     const modulesByKey = new Map(adminModules.map((module) => [module.key, module]));
     const isAdministrator = Boolean(sessionUser?.roles.includes("administrator"));
@@ -500,6 +507,16 @@ export default function SystemShell({ title, subtitle, activeKey, children }: Sy
                     <p className="text-xs font-semibold text-slate-500">{formatRoles(sessionUser.roles)}</p>
                   </div>
                 )}
+                {sessionUser && (
+                  <button
+                    type="button"
+                    onClick={() => setProfileOpen(true)}
+                    className="inline-flex items-center gap-2 rounded-md border border-slate-300 bg-white px-4 py-2 text-sm font-semibold text-slate-700 hover:bg-slate-100"
+                  >
+                    <AccountCircleIcon fontSize="small" />
+                    Mi perfil
+                  </button>
+                )}
                 {sessionUser && canUserAccessModule(sessionUser, "notifications") && (
                   <button
                     type="button"
@@ -544,6 +561,7 @@ export default function SystemShell({ title, subtitle, activeKey, children }: Sy
           onClose={() => setNotificationsOpen(false)}
         />
       )}
+      {profileOpen && <ProfileModal onClose={() => setProfileOpen(false)} />}
       <SystemNotifier />
     </main>
   );
@@ -565,6 +583,129 @@ export default function SystemShell({ title, subtitle, activeKey, children }: Sy
     }
   }
 }
+
+function ProfileModal({ onClose }: { onClose: () => void }) {
+  const [profile, setProfile] = useState<ShellProfile | null>(null);
+  const [loading, setLoading] = useState(true);
+  const [saving, setSaving] = useState(false);
+  const [passwords, setPasswords] = useState({ currentPassword: "", nextPassword: "", confirmPassword: "" });
+
+  useEffect(() => {
+    let mounted = true;
+    fetch("/api/admin/profile", { cache: "no-store" })
+      .then((response) => (response.ok ? response.json() : Promise.reject(response)))
+      .then((data) => {
+        if (mounted) setProfile(data.profile || null);
+      })
+      .catch(() => notifySystem("No se pudo cargar tu perfil.", { tone: "error", title: "Mi perfil" }))
+      .finally(() => {
+        if (mounted) setLoading(false);
+      });
+
+    return () => {
+      mounted = false;
+    };
+  }, []);
+
+  async function updatePassword(e: FormEvent) {
+    e.preventDefault();
+    setSaving(true);
+    const res = await fetch("/api/admin/profile", {
+      method: "PUT",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(passwords),
+    });
+    const data = await res.json().catch(() => ({}));
+    setSaving(false);
+    if (!res.ok) {
+      notifySystem(data.error || "No se pudo actualizar la contrasena.", { tone: "error", title: "Mi perfil" });
+      return;
+    }
+    setPasswords({ currentPassword: "", nextPassword: "", confirmPassword: "" });
+    notifySystem("Contrasena actualizada correctamente.", { tone: "success", title: "Mi perfil" });
+  }
+
+  const worker = profile?.worker;
+  const user = profile?.user;
+
+  return (
+    <div className="fixed inset-0 z-[75] grid place-items-center bg-slate-950/45 px-4 py-6">
+      <section className="max-h-[92vh] w-full max-w-3xl overflow-auto rounded-lg border border-slate-200 bg-white shadow-2xl">
+        <div className="flex items-start justify-between gap-4 border-b border-slate-200 p-5">
+          <div>
+            <h2 className="text-xl font-bold text-[#173C61]">Mi perfil</h2>
+            <p className="mt-1 text-sm text-slate-600">Datos personales y seguridad de la cuenta.</p>
+          </div>
+          <button type="button" onClick={onClose} className="rounded-md border border-slate-300 bg-white px-3 py-2 text-sm font-bold text-slate-700 hover:bg-slate-50">
+            Cerrar
+          </button>
+        </div>
+
+        {loading ? (
+          <p className="p-5 text-sm text-slate-600">Cargando perfil...</p>
+        ) : (
+          <div className="grid gap-5 p-5">
+            <section className="rounded-md border border-slate-200 bg-slate-50 p-4">
+              <h3 className="font-bold text-[#173C61]">Cuenta de usuario</h3>
+              <div className="mt-4 grid gap-3 sm:grid-cols-2">
+                <ProfileInfo label="Nombre" value={user?.name || "-"} />
+                <ProfileInfo label="Correo" value={user?.email || "-"} />
+                <ProfileInfo label="Roles" value={user?.roles ? formatRoles(user.roles) : "-"} />
+                <ProfileInfo label="Estado" value={user?.active ? "Activo" : "Inactivo"} />
+              </div>
+            </section>
+
+            <section className="rounded-md border border-slate-200 bg-white p-4">
+              <h3 className="font-bold text-[#173C61]">Datos personales</h3>
+              <div className="mt-4 grid gap-3 sm:grid-cols-2">
+                <ProfileInfo label="Cedula" value={worker?.documentId || user?.workerDocumentId || "-"} />
+                <ProfileInfo label="Cargo" value={worker?.position || "-"} />
+                <ProfileInfo label="Telefono" value={worker?.phone || "-"} />
+                <ProfileInfo label="Correo personal" value={worker?.email || "-"} />
+                <ProfileInfo label="Grupo de trabajo" value={worker?.workGroupName || "-"} />
+                <ProfileInfo label="Estado laboral" value={worker?.status === "active" ? "Activo" : worker?.status === "inactive" ? "Inactivo" : "-"} />
+              </div>
+            </section>
+
+            <form onSubmit={updatePassword} className="rounded-md border border-slate-200 bg-white p-4">
+              <h3 className="font-bold text-[#173C61]">Cambiar contrasena</h3>
+              <p className="mt-1 text-xs text-slate-500">La nueva contrasena se guarda cifrada mediante hash seguro.</p>
+              <div className="mt-4 grid gap-3 sm:grid-cols-3">
+                <label className="grid gap-2 text-sm font-semibold text-slate-700">
+                  Contrasena actual
+                  <input required type="password" className={profileInputClass} value={passwords.currentPassword} onChange={(e) => setPasswords({ ...passwords, currentPassword: e.target.value })} />
+                </label>
+                <label className="grid gap-2 text-sm font-semibold text-slate-700">
+                  Nueva contrasena
+                  <input required minLength={8} type="password" className={profileInputClass} value={passwords.nextPassword} onChange={(e) => setPasswords({ ...passwords, nextPassword: e.target.value })} />
+                </label>
+                <label className="grid gap-2 text-sm font-semibold text-slate-700">
+                  Confirmar contrasena
+                  <input required minLength={8} type="password" className={profileInputClass} value={passwords.confirmPassword} onChange={(e) => setPasswords({ ...passwords, confirmPassword: e.target.value })} />
+                </label>
+              </div>
+              <button disabled={saving} className="mt-4 rounded-md bg-[#173C61] px-5 py-3 text-sm font-bold text-white hover:bg-[#218F93] disabled:opacity-60">
+                {saving ? "Actualizando..." : "Actualizar contrasena"}
+              </button>
+            </form>
+          </div>
+        )}
+      </section>
+    </div>
+  );
+}
+
+function ProfileInfo({ label, value }: { label: string; value: string }) {
+  return (
+    <div>
+      <p className="text-xs font-bold uppercase tracking-[0.08em] text-slate-500">{label}</p>
+      <p className="mt-1 font-semibold text-slate-900">{value}</p>
+    </div>
+  );
+}
+
+const profileInputClass =
+  "w-full rounded-md border border-slate-300 bg-white px-4 py-3 text-slate-900 outline-none transition placeholder:text-slate-400 focus:border-[#218F93] focus:ring-4 focus:ring-[#33C3C9]/15";
 
 function NotificationsPanel({
   notifications,

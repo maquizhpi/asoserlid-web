@@ -196,6 +196,26 @@ export async function updateUser(id: string, input: unknown) {
   }
 }
 
+export async function changeUserPassword(id: string, currentPassword: string, nextPassword: string) {
+  if (!ObjectId.isValid(id)) throw new Error("Usuario no valido.");
+  if (!currentPassword) throw new Error("Ingresa la contrasena actual.");
+  if (!nextPassword || nextPassword.length < 8) throw new Error("La nueva contrasena debe tener al menos 8 caracteres.");
+
+  const db = await getDb();
+  const user = await db.collection<UserDocument>(usersCollection).findOne({ _id: new ObjectId(id), active: true });
+  if (!user) throw new Error("Usuario no encontrado.");
+
+  const result = await verifyPassword(currentPassword, user.passwordHash);
+  if (!result.valid) throw new Error("La contrasena actual no es correcta.");
+
+  await db.collection<UserDocument>(usersCollection).updateOne(
+    { _id: user._id },
+    { $set: { passwordHash: await hashPassword(nextPassword), updatedAt: new Date() } }
+  );
+
+  return true;
+}
+
 export async function deleteUser(id: string) {
   const db = await getDb();
   const user = await db.collection<UserDocument>(usersCollection).findOne({ _id: new ObjectId(id) });
