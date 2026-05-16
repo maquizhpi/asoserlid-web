@@ -2,8 +2,13 @@ import "./globals.css";
 import type { Metadata } from "next";
 
 export const metadata: Metadata = {
-  title: "ASOSERLID - Servicios de Limpieza",
-  description: "Limpieza profesional, desinfeccion y mantenimiento con personal certificado.",
+  title: "SIT - Sistema Integrado de Trabajo",
+  description: "Sistema Integrado de Trabajo para gestion operativa, administrativa y reportes.",
+  icons: {
+    icon: "/favicon.svg",
+    shortcut: "/favicon.svg",
+    apple: "/favicon.svg",
+  },
 };
 
 export default function RootLayout({ children }: { children: React.ReactNode }) {
@@ -13,4 +18,3 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
     </html>
   );
 }
-

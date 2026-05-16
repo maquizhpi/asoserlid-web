@@ -2,7 +2,7 @@ import type { Metadata } from "next";
 import Image from "next/image";
 import Link from "next/link";
 import { notFound } from "next/navigation";
-import ClientComments from "@/components/ClientComments";
+import BlogComments from "@/components/BlogComments";
 import ShareButtons from "@/components/ShareButtons";
 import { getPublishedPostBySlug } from "@/lib/blogStore";
 
@@ -81,7 +81,7 @@ export default async function PostPage({ params }: { params: Params }) {
             <ShareButtons title={post.title} slug={post.slug} />
           </div>
 
-          <ClientComments />
+          <BlogComments postSlug={post.slug} postTitle={post.title} />
         </div>
       </article>
     </main>

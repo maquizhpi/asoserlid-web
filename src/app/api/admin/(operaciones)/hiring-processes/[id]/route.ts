@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { ObjectId, type Document } from "mongodb";
-import { hasModuleAccess } from "@/lib/adminAuth";
+import { getAdminSession, hasModuleAccess } from "@/lib/adminAuth";
 import { getDb } from "@/lib/mongodb";
 import { getOperationsErrorMessage, hiringProcessSchema } from "@/lib/operationsStore";
 import { normalizeProcess, serializeProcess } from "../route";
@@ -39,7 +39,8 @@ export async function PUT(req: NextRequest, context: RouteContext) {
 }
 
 export async function DELETE(_req: NextRequest, context: RouteContext) {
-  if (!(await hasModuleAccess("hiring-processes"))) return NextResponse.json({ ok: false, error: "No autorizado." }, { status: 401 });
+  const session = await getAdminSession();
+  if (!session?.roles.includes("administrator")) return NextResponse.json({ ok: false, error: "Solo el administrador puede eliminar procesos de contratacion." }, { status: 403 });
   try {
     const { id } = await context.params;
     const db = await getDb();

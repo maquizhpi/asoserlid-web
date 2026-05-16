@@ -6,6 +6,8 @@ export const userRoles = [
   "operations",
   "human_resources",
   "accounting",
+  "advertising",
+  "legal_representative",
   "client",
   "worker",
 ] as const satisfies readonly UserRole[];
@@ -16,6 +18,8 @@ export const roleLabels: Record<UserRole, string> = {
   operations: "Operaciones",
   human_resources: "RR. HH.",
   accounting: "Contabilidad",
+  advertising: "Publicidad",
+  legal_representative: "Representante legal",
   client: "Cliente",
   worker: "Trabajador",
 };
@@ -23,4 +27,3 @@ export const roleLabels: Record<UserRole, string> = {
 export function getRoleOptions() {
   return userRoles.map((value) => ({ value, label: roleLabels[value] }));
 }
-

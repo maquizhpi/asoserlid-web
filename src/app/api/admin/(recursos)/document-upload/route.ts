@@ -6,7 +6,7 @@ import { getDriveClient } from "@/lib/googleDrive";
 const allowedTypes = new Set(["application/pdf", "image/jpeg", "image/png", "image/webp"]);
 
 export async function POST(req: NextRequest) {
-  const canUpload = await Promise.all(["worker-intake", "worker-documents"].map((module) => hasModuleAccess(module)));
+  const canUpload = await Promise.all(["worker-intake", "worker-documents", "supervisor-daily-report"].map((module) => hasModuleAccess(module)));
   if (!canUpload.some(Boolean)) {
     return NextResponse.json({ ok: false, error: "No autorizado." }, { status: 401 });
   }

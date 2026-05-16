@@ -19,14 +19,19 @@ export default function CertificationsAdminPage() {
         emptyItem={emptyItem}
         titleKey="title"
         subtitleKey="category"
-        newLabel="Nuevo respaldo"
-        saveLabel="Guardar respaldo"
+        newLabel="Nueva certificacion / curso"
+        saveLabel="Guardar certificacion / curso"
         searchableKeys={["title", "issuer", "category"]}
         fields={[
           { key: "title", label: "Titulo", required: true },
           { key: "issuer", label: "Entidad emisora" },
-          { key: "category", label: "Categoria", required: true },
-          { key: "fileUrl", label: "Imagen o URL de documento", type: "image", required: true },
+          { key: "category", label: "Categoria", type: "select", required: true, options: [
+            { value: "Certificacion", label: "Certificacion" },
+            { value: "Curso realizado", label: "Curso realizado" },
+            { value: "Capacitacion", label: "Capacitacion" },
+            { value: "Reconocimiento", label: "Reconocimiento" },
+          ] },
+          { key: "fileUrl", label: "Imagen o documento Cloudinary", type: "image", required: true, uploadFolder: "asoserlid/certificaciones", accept: "image/*,application/pdf" },
           { key: "fileType", label: "Tipo", type: "select", options: [
             { value: "image", label: "Imagen" },
             { value: "document", label: "Documento" },

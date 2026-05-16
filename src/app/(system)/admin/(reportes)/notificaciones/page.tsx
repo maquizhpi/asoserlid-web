@@ -29,6 +29,8 @@ export default function NotificationsPage() {
             { value: "operations", label: "Operaciones" },
             { value: "human_resources", label: "RR. HH." },
             { value: "accounting", label: "Contabilidad" },
+            { value: "advertising", label: "Publicidad" },
+            { value: "legal_representative", label: "Representante legal" },
             { value: "client", label: "Cliente" },
             { value: "worker", label: "Trabajador" },
           ] },

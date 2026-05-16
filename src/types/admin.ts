@@ -6,6 +6,8 @@ export type UserRole =
   | "operations"
   | "human_resources"
   | "accounting"
+  | "advertising"
+  | "legal_representative"
   | "client"
   | "worker";
 
@@ -20,6 +22,8 @@ export type Machine = {
   status: MachineStatus;
   location?: string;
   assignedTo?: string;
+  ownerWorkGroupId?: string;
+  ownerWorkGroupName?: string;
   notes?: string;
   usageLogs?: MachineUsageLog[];
   custodyReceipts?: MachineCustodyReceipt[];
@@ -191,6 +195,11 @@ export type Worker = {
   position: string;
   phone: string;
   email?: string;
+  photoUrl?: string;
+  photoPublicId?: string;
+  bankName?: string;
+  bankAccountType?: string;
+  bankAccountNumber?: string;
   status: "active" | "inactive";
   documents?: string;
   assignedClientId?: string;
@@ -202,8 +211,108 @@ export type Worker = {
   supervisor?: string;
   workGroupId?: string;
   workGroupName?: string;
+  talentProfile?: TalentHumanProfile;
+  eppDelivery?: EppDeliveryProfile;
   createdAt?: string;
   updatedAt?: string;
+};
+
+export type EppDeliveryProfile = {
+  completed?: boolean;
+  deliveryDate?: string;
+  period?: string;
+  employer?: string;
+  contractId?: string;
+  contractName?: string;
+  workplace?: string;
+  representativeName?: string;
+  observations?: string;
+  items?: EppDeliveryItem[];
+  generatedAt?: string;
+};
+
+export type EppDeliveryItem = {
+  id: string;
+  name: string;
+  quantity?: number;
+  delivered?: boolean;
+  notes?: string;
+};
+
+export type TalentHumanProfile = {
+  completed?: boolean;
+  completedAt?: string;
+  currentDate?: string;
+  birthDate?: string;
+  age?: number;
+  civilStatus?: string;
+  homePhone?: string;
+  hasConadisCard?: string;
+  bloodType?: string;
+  experienceYears?: number;
+  province?: string;
+  canton?: string;
+  parish?: string;
+  zone?: string;
+  mainStreet?: string;
+  secondaryStreet?: string;
+  houseNumber?: string;
+  shirtSize?: string;
+  pantsSize?: string;
+  shoeSize?: string;
+  familyLoads?: TalentFamilyLoad[];
+  education?: TalentEducation[];
+  mainCourses?: string;
+  additionalKnowledge?: string;
+  workHistory?: TalentWorkHistory[];
+  trainings?: TalentTraining[];
+  personalReferences?: TalentPersonalReference[];
+  declarationAccepted?: boolean;
+};
+
+export type TalentFamilyLoad = {
+  id: string;
+  type: string;
+  fullName: string;
+  documentId?: string;
+  birthDate?: string;
+  age?: number;
+  conadisCard?: string;
+};
+
+export type TalentEducation = {
+  id: string;
+  level: string;
+  completed?: string;
+  institution?: string;
+  title?: string;
+};
+
+export type TalentWorkHistory = {
+  id: string;
+  position?: string;
+  employer?: string;
+  workTime?: string;
+  startDate?: string;
+  endDate?: string;
+  phone?: string;
+  exitReason?: string;
+};
+
+export type TalentTraining = {
+  id: string;
+  name: string;
+  description?: string;
+  placeOrCompany?: string;
+  date?: string;
+};
+
+export type TalentPersonalReference = {
+  id: string;
+  name: string;
+  relationship?: string;
+  phone?: string;
+  residence?: string;
 };
 
 export type WorkGroup = {
@@ -233,6 +342,10 @@ export type ServiceContract = {
   _id?: string;
   clientId?: string;
   clientName: string;
+  contractNumber?: string;
+  contractAdministrator?: string;
+  contractAdministratorEmail?: string;
+  contractAdministratorPhone?: string;
   serviceType: string;
   area?: string;
   shift?: string;
@@ -277,6 +390,7 @@ export type ContractShift = {
   shiftName: string;
   startTime: string;
   endTime: string;
+  lunchBreakMinutes?: number;
   workDays: string[];
   observation?: string;
   status: "active" | "inactive";
@@ -318,6 +432,7 @@ export type SupervisorReport = {
   workGroupName?: string;
   startTime?: string;
   endTime?: string;
+  lunchBreakMinutes?: number;
   totalHours?: number;
   normalHours?: number;
   overtimeHours?: number;
@@ -343,6 +458,7 @@ export type SupervisorReportStaff = {
   position?: string;
   startTime?: string;
   endTime?: string;
+  lunchBreakMinutes?: number;
   totalHours?: number;
   normalHours?: number;
   overtimeHours?: number;
@@ -352,6 +468,10 @@ export type SupervisorReportStaff = {
   permissionHours?: number;
   sicknessHours?: number;
   attendanceStatus: "attended" | "absent" | "permission" | "sick" | "late" | "replacement";
+  supportDocumentSubject?: string;
+  supportDocumentUrl?: string;
+  supportDocumentPublicId?: string;
+  supportDocumentName?: string;
   notes?: string;
 };
 
@@ -390,6 +510,33 @@ export type SupplyKitItem = {
   unit?: string;
   quantity: number;
   notes?: string;
+};
+
+export type SupplyKitDelivery = {
+  _id?: string;
+  kitId: string;
+  kitCode?: string;
+  period: string;
+  clientId?: string;
+  clientName: string;
+  contractId?: string;
+  contractName?: string;
+  workplaceId?: string;
+  workplaceName?: string;
+  supervisorId?: string;
+  supervisorName?: string;
+  items: SupplyKitDeliveryItem[];
+  totalQuantity: number;
+  responsible?: string;
+  deliveryDate: string;
+  notes?: string;
+  status: "draft" | "delivered" | "cancelled";
+  createdAt?: string;
+  updatedAt?: string;
+};
+
+export type SupplyKitDeliveryItem = SupplyKitItem & {
+  source: "base" | "extra";
 };
 
 export type SupplyProduct = {
@@ -481,11 +628,16 @@ export type HiringProcess = {
   formaPago?: string;
   tipoAdjudicacion?: string;
   plazoEntregaDias?: number;
-  vigenciaOfertaDias?: number;
-  funcionarioEncargado?: string;
-  areaResponsable: string;
-  estadoProceso: HiringProcessStatus;
-  descripcion?: string;
+    vigenciaOfertaDias?: number;
+    funcionarioEncargado?: string;
+    areaResponsable: string;
+    workGroupId?: string;
+    workGroupName?: string;
+    processOwner?: string;
+    estadoProceso: HiringProcessStatus;
+    winningCompany?: string;
+    winningPrice?: number;
+    descripcion?: string;
   notas?: string;
   fechaInicio: string;
   fechaVencimiento: string;
@@ -512,6 +664,7 @@ export type InternalNotification = {
   message: string;
   dueDate?: string;
   status: "active" | "read" | "archived";
+  acknowledgedBy?: string[];
   createdAt?: string;
   updatedAt?: string;
 };

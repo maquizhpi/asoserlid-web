@@ -33,8 +33,8 @@ import WorkHistoryIcon from "@mui/icons-material/WorkHistory";
 import WebIcon from "@mui/icons-material/Web";
 import { adminModules } from "@/lib/adminModules";
 import { roleLabels } from "@/lib/userRoles";
-import type { UserRole } from "@/types/admin";
-import SystemNotifier from "@/components/system/SystemNotifier";
+import type { InternalNotification, UserRole } from "@/types/admin";
+import SystemNotifier, { notifySystem } from "@/components/system/SystemNotifier";
 
 type SystemShellProps = {
   title: string;
@@ -48,6 +48,17 @@ type ShellUser = {
   email: string;
   roles: UserRole[];
   moduleAccess: string[];
+};
+
+type ContractExpirationAlert = {
+  clientName: string;
+  endDate: string;
+  daysLeft: number;
+  autoClosed: boolean;
+};
+
+type HiringProcessAlert = {
+  message: string;
 };
 
 type SidebarConfigItem = {
@@ -74,6 +85,9 @@ type SidebarSection = {
 const idleTimeoutMs = 30 * 60 * 1000;
 const redirectStorageKey = "asoserlid_admin_redirect_after_login";
 const shellUserStorageKey = "asoserlid_admin_shell_user";
+const contractAlertStoragePrefix = "asoserlid_contract_alerts_seen";
+const processAlertStoragePrefix = "asoserlid_process_alerts_seen";
+const notificationAlertStoragePrefix = "asoserlid_notifications_seen";
 
 const moduleIcons: Record<string, typeof DashboardIcon> = {
   roles: SupervisorAccountIcon,
@@ -219,6 +233,8 @@ export default function SystemShell({ title, subtitle, activeKey, children }: Sy
   const router = useRouter();
   const [sessionUser, setSessionUser] = useState<ShellUser | null>(null);
   const [sidebarOpen, setSidebarOpen] = useState(false);
+  const [notifications, setNotifications] = useState<InternalNotification[]>([]);
+  const [notificationsOpen, setNotificationsOpen] = useState(false);
   const sidebarSections = useMemo(() => {
     const modulesByKey = new Map(adminModules.map((module) => [module.key, module]));
     const isAdministrator = Boolean(sessionUser?.roles.includes("administrator"));
@@ -274,6 +290,86 @@ export default function SystemShell({ title, subtitle, activeKey, children }: Sy
   useEffect(() => {
     setSidebarOpen(false);
   }, [pathname]);
+
+  useEffect(() => {
+    if (!sessionUser) return;
+    const today = new Date().toISOString().slice(0, 10);
+    const key = `${contractAlertStoragePrefix}:${sessionUser.email}:${today}`;
+    if (sessionStorage.getItem(key)) return;
+
+    fetch("/api/admin/contract-expiration-alerts", { cache: "no-store" })
+      .then((response) => (response.ok ? response.json() : null))
+      .then((data) => {
+        const alerts = data?.alerts || [];
+        if (!alerts.length) {
+          sessionStorage.setItem(key, "1");
+          return;
+        }
+        const closed = alerts.filter((alert: ContractExpirationAlert) => alert.autoClosed);
+        const expiring = alerts.filter((alert: ContractExpirationAlert) => !alert.autoClosed);
+        const lines = [
+          closed.length ? `${closed.length} contrato(s) ya finalizaron y fueron cerrados automaticamente; el personal quedo disponible.` : "",
+          expiring.length ? `${expiring.length} contrato(s) terminan en los proximos 30 dias. Valida la informacion antes del cierre.` : "",
+          ...alerts.slice(0, 5).map((alert: ContractExpirationAlert) => `- ${alert.clientName}: ${alert.endDate} (${alert.daysLeft} dia(s))`),
+        ].filter(Boolean);
+        notifySystem(lines.join("\n"), { tone: closed.length ? "warning" : "info", title: "Aviso de contratos" });
+        sessionStorage.setItem(key, "1");
+      })
+      .catch(() => undefined);
+  }, [sessionUser]);
+
+  useEffect(() => {
+    if (!sessionUser || !canUserAccessModule(sessionUser, "notifications")) return;
+    let mounted = true;
+
+    fetch("/api/admin/notifications", { cache: "no-store" })
+      .then((response) => (response.ok ? response.json() : null))
+      .then((data) => {
+        if (!mounted) return;
+        const visible = ((data?.items || []) as InternalNotification[]).filter((item) => isNotificationVisibleForUser(item, sessionUser));
+        setNotifications(visible);
+
+        const active = visible.filter((item) => item.status === "active");
+        if (!active.length) return;
+        const today = new Date().toISOString().slice(0, 10);
+        const key = `${notificationAlertStoragePrefix}:${sessionUser.email}:${today}`;
+        if (sessionStorage.getItem(key)) return;
+        notifySystem(
+          [`Tienes ${active.length} notificacion(es) activa(s).`, ...active.slice(0, 5).map((item) => `- ${item.title}: ${item.message.split("\n")[0]}`)].join("\n"),
+          { tone: "info", title: "Notificaciones" }
+        );
+        sessionStorage.setItem(key, "1");
+      })
+      .catch(() => undefined);
+
+    return () => {
+      mounted = false;
+    };
+  }, [sessionUser]);
+
+  useEffect(() => {
+    if (!sessionUser) return;
+    const today = new Date().toISOString().slice(0, 10);
+    const key = `${processAlertStoragePrefix}:${sessionUser.email}:${today}`;
+    if (sessionStorage.getItem(key)) return;
+
+    fetch("/api/admin/hiring-process-alerts", { cache: "no-store" })
+      .then((response) => (response.ok ? response.json() : null))
+      .then((data) => {
+        const alerts = data?.alerts || [];
+        if (!alerts.length) {
+          sessionStorage.setItem(key, "1");
+          return;
+        }
+        const lines = [
+          `${alerts.length} fecha(s) o actividad(es) de procesos requieren seguimiento.`,
+          ...alerts.slice(0, 5).map((alert: HiringProcessAlert) => `- ${alert.message}`),
+        ];
+        notifySystem(lines.join("\n"), { tone: "info", title: "Aviso de procesos" });
+        sessionStorage.setItem(key, "1");
+      })
+      .catch(() => undefined);
+  }, [sessionUser]);
 
   useEffect(() => {
     let timeoutId: number | undefined;
@@ -343,8 +439,8 @@ export default function SystemShell({ title, subtitle, activeKey, children }: Sy
                 <Inventory2Icon fontSize="small" />
               </span>
               <span>
-                <span className="block text-xs font-semibold uppercase tracking-[0.22em] text-cyan-100">ASOSERLID</span>
-                <span className="mt-1 block text-xl font-bold">Sistema</span>
+                <span className="block text-xs font-semibold uppercase tracking-[0.22em] text-cyan-100">SIT</span>
+                <span className="mt-1 block text-xl font-bold">Sistema Integrado</span>
               </span>
             </Link>
           </div>
@@ -404,6 +500,21 @@ export default function SystemShell({ title, subtitle, activeKey, children }: Sy
                     <p className="text-xs font-semibold text-slate-500">{formatRoles(sessionUser.roles)}</p>
                   </div>
                 )}
+                {sessionUser && canUserAccessModule(sessionUser, "notifications") && (
+                  <button
+                    type="button"
+                    onClick={() => setNotificationsOpen(true)}
+                    className="relative inline-flex items-center gap-2 rounded-md border border-slate-300 bg-white px-4 py-2 text-sm font-semibold text-slate-700 hover:bg-slate-100"
+                  >
+                    <NotificationsIcon fontSize="small" />
+                    Notificaciones
+                    {notifications.filter((item) => item.status === "active").length > 0 && (
+                      <span className="absolute -right-2 -top-2 grid h-6 min-w-6 place-items-center rounded-full bg-red-600 px-1.5 text-xs font-bold text-white">
+                        {notifications.filter((item) => item.status === "active").length}
+                      </span>
+                    )}
+                  </button>
+                )}
                 <Link
                   href="/"
                   className="inline-flex items-center gap-2 rounded-md border border-slate-300 bg-white px-4 py-2 text-sm font-semibold text-slate-700 hover:bg-slate-100"
@@ -425,8 +536,89 @@ export default function SystemShell({ title, subtitle, activeKey, children }: Sy
           <div className="px-4 py-6 sm:px-6">{children}</div>
         </section>
       </div>
+      {notificationsOpen && (
+        <NotificationsPanel
+          notifications={notifications}
+          user={sessionUser}
+          onAcknowledge={(notification) => acknowledgeNotification(notification)}
+          onClose={() => setNotificationsOpen(false)}
+        />
+      )}
       <SystemNotifier />
     </main>
+  );
+
+  async function acknowledgeNotification(notification: InternalNotification) {
+    if (!sessionUser || !notification._id) return;
+    const acknowledgedBy = Array.from(new Set([...(notification.acknowledgedBy || []), sessionUser.email]));
+    const nextNotification = { ...notification, acknowledgedBy };
+    setNotifications((current) => current.filter((item) => item._id !== notification._id));
+
+    const res = await fetch(`/api/admin/notifications/${notification._id}`, {
+      method: "PUT",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(nextNotification),
+    });
+    if (!res.ok) {
+      setNotifications((current) => [notification, ...current]);
+      notifySystem("No se pudo marcar la notificacion como conocida.", { tone: "error", title: "Notificacion" });
+    }
+  }
+}
+
+function NotificationsPanel({
+  notifications,
+  user,
+  onAcknowledge,
+  onClose,
+}: {
+  notifications: InternalNotification[];
+  user: ShellUser | null;
+  onAcknowledge: (notification: InternalNotification) => void;
+  onClose: () => void;
+}) {
+  const active = notifications.filter((item) => item.status === "active");
+  return (
+    <div className="fixed inset-0 z-[70] bg-slate-950/35 px-4 py-6 sm:px-6">
+      <section className="ml-auto flex h-full w-full max-w-xl flex-col rounded-lg border border-slate-200 bg-white shadow-2xl">
+        <div className="flex items-start justify-between gap-4 border-b border-slate-200 p-5">
+          <div>
+            <h2 className="text-xl font-bold text-[#173C61]">Notificaciones</h2>
+            <p className="mt-1 text-sm text-slate-600">{active.length} activa(s) de {notifications.length} notificacion(es).</p>
+          </div>
+          <button type="button" onClick={onClose} className="rounded-md border border-slate-300 bg-white px-3 py-2 text-sm font-bold text-slate-700 hover:bg-slate-50">
+            Cerrar
+          </button>
+        </div>
+
+        <div className="flex-1 space-y-3 overflow-auto p-5">
+          {notifications.map((item) => (
+            <article key={item._id || `${item.title}-${item.createdAt}`} className={`rounded-md border-l-4 p-4 ${notificationCardClass(item.status)}`}>
+              <div className="flex flex-wrap items-start justify-between gap-2">
+                <h3 className="font-bold text-[#173C61]">{item.title}</h3>
+                <div className="flex items-center gap-2">
+                  <span className={`rounded-full border px-2 py-1 text-[11px] font-bold ${notificationBadgeClass(item.status)}`}>{notificationStatusLabel(item.status)}</span>
+                  <button
+                    type="button"
+                    onClick={() => onAcknowledge(item)}
+                    className="grid h-7 w-7 place-items-center rounded-full border border-slate-300 bg-white text-sm font-bold text-slate-600 hover:border-[#218F93] hover:text-[#173C61]"
+                    title={`Marcar como conocida para ${user?.email || "este usuario"}`}
+                    aria-label="Marcar notificacion como conocida"
+                  >
+                    X
+                  </button>
+                </div>
+              </div>
+              <p className="mt-2 whitespace-pre-line text-sm leading-6 text-slate-700">{item.message}</p>
+              <p className="mt-3 text-xs font-semibold text-slate-500">
+                {item.dueDate ? `Fecha: ${item.dueDate}` : "Sin fecha"} | Para: {item.role === "all" ? "Todos" : roleLabels[item.role] || item.role}
+              </p>
+            </article>
+          ))}
+          {!notifications.length && <p className="rounded-md border border-slate-200 bg-slate-50 p-4 text-sm text-slate-600">No hay notificaciones para mostrar.</p>}
+        </div>
+      </section>
+    </div>
   );
 }
 
@@ -523,6 +715,36 @@ function isItemActive(item: SidebarItem, activeKey: string | undefined, pathname
 
 function formatRoles(roles: UserRole[]) {
   return roles.map((role) => roleLabels[role] || role).join(", ");
+}
+
+function canUserAccessModule(user: ShellUser, moduleKey: string) {
+  return user.roles.includes("administrator") || user.moduleAccess.includes(moduleKey);
+}
+
+function isNotificationVisibleForUser(notification: InternalNotification, user: ShellUser) {
+  if ((notification.acknowledgedBy || []).includes(user.email)) return false;
+  if (notification.role === "all") return true;
+  return user.roles.includes(notification.role);
+}
+
+function notificationStatusLabel(status: InternalNotification["status"]) {
+  return { active: "Activa", read: "Leida", archived: "Archivada" }[status];
+}
+
+function notificationCardClass(status: InternalNotification["status"]) {
+  return {
+    active: "border-l-[#218F93] border-slate-200 bg-cyan-50/60",
+    read: "border-l-emerald-500 border-slate-200 bg-emerald-50/50",
+    archived: "border-l-slate-400 border-slate-200 bg-slate-50",
+  }[status];
+}
+
+function notificationBadgeClass(status: InternalNotification["status"]) {
+  return {
+    active: "border-cyan-200 bg-cyan-100 text-[#173C61]",
+    read: "border-emerald-200 bg-emerald-100 text-emerald-800",
+    archived: "border-slate-200 bg-slate-100 text-slate-700",
+  }[status];
 }
 
 function readCachedShellUser() {

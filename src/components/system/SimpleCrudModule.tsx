@@ -10,6 +10,8 @@ export type CrudField<T extends Record<string, unknown>> = {
   type?: "text" | "email" | "date" | "textarea" | "select" | "image";
   required?: boolean;
   options?: { value: string; label: string }[];
+  uploadFolder?: string;
+  accept?: string;
 };
 
 type SimpleCrudModuleProps<T extends Record<string, unknown>> = {
@@ -127,18 +129,19 @@ export default function SimpleCrudModule<T extends Record<string, unknown>>({
     setForm((current) => ({ ...current, [key]: value }));
   }
 
-  async function uploadImage(key: keyof T & string, file: File) {
-    notifySystem("Cargando imagen...", { tone: "info" });
+  async function uploadImage(field: CrudField<T>, file: File) {
+    notifySystem("Cargando archivo...", { tone: "info" });
     const body = new FormData();
     body.append("file", file);
-    const res = await fetch("/api/admin/uploads", { method: "POST", body });
+    if (field.uploadFolder) body.append("folder", field.uploadFolder);
+    const res = await fetch(field.uploadFolder ? "/api/admin/cloudinary-upload" : "/api/admin/uploads", { method: "POST", body });
     const data = await res.json().catch(() => ({}));
     if (!res.ok) {
-      notifySystem(data.error || "No se pudo cargar la imagen.", { tone: "error" });
+      notifySystem(data.error || "No se pudo cargar el archivo.", { tone: "error" });
       return;
     }
-    updateField(key, data.imageUrl);
-    notifySystem("Imagen cargada. Guarda el registro para conservar el cambio.", { tone: "success" });
+    updateField(field.key, data.url || data.imageUrl);
+    notifySystem("Archivo cargado. Guarda el registro para conservar el cambio.", { tone: "success" });
   }
 
   return (
@@ -214,17 +217,14 @@ export default function SimpleCrudModule<T extends Record<string, unknown>>({
                   </select>
                 ) : field.type === "image" ? (
                   <div className="grid gap-3">
-                    {String(form[field.key] || "") && (
-                      // eslint-disable-next-line @next/next/no-img-element
-                      <img src={String(form[field.key])} alt="" className="h-36 w-full rounded-md border border-slate-200 object-contain" />
-                    )}
+                    {String(form[field.key] || "") && <FilePreview url={String(form[field.key])} />}
                     <input
                       type="file"
-                      accept="image/*"
+                      accept={field.accept || "image/*"}
                       className={inputClass}
                       onChange={(e) => {
                         const file = e.target.files?.[0];
-                        if (file) uploadImage(field.key, file);
+                        if (file) uploadImage(field, file);
                         e.currentTarget.value = "";
                       }}
                     />
@@ -265,3 +265,16 @@ export default function SimpleCrudModule<T extends Record<string, unknown>>({
 
 const inputClass =
   "w-full rounded-md border border-slate-300 bg-white px-4 py-3 text-slate-900 outline-none transition placeholder:text-slate-400 focus:border-[#218F93] focus:ring-4 focus:ring-[#33C3C9]/15";
+
+function FilePreview({ url }: { url: string }) {
+  const isImage = /\.(png|jpe?g|webp|gif|avif|svg)(\?|$)/i.test(url) || url.includes("image/upload");
+  if (!isImage) {
+    return (
+      <a href={url} target="_blank" rel="noreferrer" className="rounded-md border border-slate-200 bg-slate-50 px-4 py-3 text-sm font-semibold text-[#173C61] hover:bg-slate-100">
+        Ver archivo cargado
+      </a>
+    );
+  }
+  // eslint-disable-next-line @next/next/no-img-element
+  return <img src={url} alt="" className="h-36 w-full rounded-md border border-slate-200 object-contain" />;
+}

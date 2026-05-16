@@ -144,49 +144,82 @@ export default function AdminPage() {
 
   if (!authenticated) {
     return (
-      <main className="grid min-h-screen place-items-center bg-slate-50 px-4 py-16">
-        <form onSubmit={submitLogin} className="w-full max-w-md rounded-lg border border-slate-200 bg-white p-6 shadow-sm">
-          <p className="text-sm font-semibold uppercase tracking-[0.12em] text-[#218F93]">Sistema interno</p>
-          <h1 className="mt-1 text-2xl font-bold text-[#173C61]">Iniciar sesion</h1>
-          <p className="mt-2 text-sm text-slate-600">Acceso para administracion y operacion de ASOSERLID.</p>
+      <main className="relative grid min-h-screen place-items-center overflow-hidden bg-[#0f2742] px-4 py-8">
+        <img
+          src="/sistema-sit.png"
+          alt=""
+          className="absolute inset-0 h-full w-full scale-105 object-cover object-center opacity-55 blur-[2px]"
+        />
+        <div className="absolute inset-0 bg-[#0f2742]/50" />
+        <div className="absolute inset-x-0 bottom-0 h-1/2 bg-gradient-to-t from-[#0f2742] via-[#0f2742]/60 to-transparent" />
+        <div className="absolute left-[-12rem] top-[-10rem] h-96 w-96 rounded-full bg-[#33C3C9]/25 blur-3xl" />
+        <div className="absolute bottom-[-10rem] right-[-8rem] h-96 w-96 rounded-full bg-[#7AC143]/20 blur-3xl" />
 
-          <label className="mt-6 grid gap-2 text-sm font-semibold text-slate-700">
-            Correo
-            <input
-              required
-              type="email"
-              className={inputClass}
-              value={login.email}
-              onChange={(e) => setLogin({ ...login, email: e.target.value })}
+        <section className="relative z-10 grid w-full max-w-5xl overflow-hidden rounded-xl border border-white/25 bg-white shadow-2xl md:grid-cols-[0.92fr_1.08fr]">
+          <form onSubmit={submitLogin} className="bg-white px-6 py-8 sm:px-10 sm:py-12">
+            <div className="mb-8">
+              <p className="text-sm font-semibold uppercase tracking-[0.16em] text-[#218F93]">SIT</p>
+              <h1 className="mt-2 text-3xl font-bold text-[#173C61]">Iniciar sesion</h1>
+              <p className="mt-2 text-sm leading-6 text-slate-600">Sistema Integrado de Trabajo para administracion y operacion.</p>
+            </div>
+
+            <label className="grid gap-2 text-sm font-semibold text-slate-700">
+              Correo
+              <input
+                required
+                type="email"
+                className={inputClass}
+                value={login.email}
+                onChange={(e) => setLogin({ ...login, email: e.target.value })}
+              />
+            </label>
+
+            <label className="mt-4 grid gap-2 text-sm font-semibold text-slate-700">
+              Contrasena
+              <input
+                required
+                type="password"
+                className={inputClass}
+                value={login.password}
+                onChange={(e) => setLogin({ ...login, password: e.target.value })}
+              />
+            </label>
+
+            <button className="mt-7 w-full rounded-md bg-[#173C61] px-5 py-3 font-semibold text-white shadow-lg shadow-[#173C61]/20 transition hover:bg-[#218F93]">
+              Ingresar
+            </button>
+
+            {status && <p className="mt-4 rounded-md bg-red-50 px-4 py-3 text-sm text-red-700">{status}</p>}
+            <Link href="/" className="mt-5 block text-center text-sm font-semibold text-[#173C61] hover:text-[#218F93]">
+              Volver al sitio web
+            </Link>
+          </form>
+
+          <aside className="relative hidden min-h-[31rem] overflow-hidden bg-[#173C61] md:block">
+            <img
+              src="/sistema-sit.png"
+              alt="SIT Sistema Integrado de Trabajo"
+              className="absolute inset-0 h-full w-full scale-110 object-cover object-center opacity-90"
             />
-          </label>
-
-          <label className="mt-4 grid gap-2 text-sm font-semibold text-slate-700">
-            Contrasena
-            <input
-              required
-              type="password"
-              className={inputClass}
-              value={login.password}
-              onChange={(e) => setLogin({ ...login, password: e.target.value })}
-            />
-          </label>
-
-          <button className="mt-6 w-full rounded-md bg-[#173C61] px-5 py-3 font-semibold text-white hover:bg-[#218F93]">
-            Ingresar
-          </button>
-
-          {status && <p className="mt-4 rounded-md bg-red-50 px-4 py-3 text-sm text-red-700">{status}</p>}
-          <Link href="/" className="mt-4 block text-center text-sm font-semibold text-[#173C61] hover:text-[#218F93]">
-            Volver al sitio web
-          </Link>
-        </form>
+            <div className="absolute inset-0 bg-gradient-to-br from-[#173C61]/75 via-[#173C61]/35 to-[#218F93]/20" />
+            <div className="absolute inset-x-8 bottom-8 rounded-lg border border-white/25 bg-white/15 p-6 text-center text-white shadow-2xl backdrop-blur-md">
+              <h2 className="text-4xl font-bold">Bienvenido</h2>
+              <p className="mx-auto mt-3 max-w-md text-sm leading-6 text-white/90">Organizacion, eficiencia y compromiso para el control diario del trabajo.</p>
+              <div className="mt-5 grid grid-cols-4 gap-2 text-xs font-bold uppercase tracking-[0.08em] text-white/85">
+                <span>Control</span>
+                <span>Gestion</span>
+                <span>Procesos</span>
+                <span>Personas</span>
+              </div>
+            </div>
+          </aside>
+        </section>
       </main>
     );
   }
 
   return (
-    <SystemShell title="Sistema administrativo" subtitle="Modulos internos obligatorios para operacion, control y reportes.">
+    <SystemShell title="Sistema Integrado de Trabajo" subtitle="Modulos internos obligatorios para operacion, control y reportes.">
       {status && <p className="mb-5 rounded-md border border-slate-200 bg-white px-4 py-3 text-sm text-slate-700">{status}</p>}
 
       {dashboardStats && (

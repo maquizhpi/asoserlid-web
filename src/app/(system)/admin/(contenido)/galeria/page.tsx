@@ -24,7 +24,7 @@ export default function GalleryAdminPage() {
         fields={[
           { key: "title", label: "Titulo", required: true },
           { key: "category", label: "Categoria", required: true },
-          { key: "imageUrl", label: "Imagen", type: "image", required: true },
+          { key: "imageUrl", label: "Imagen Cloudinary", type: "image", required: true, uploadFolder: "asoserlid/galeria" },
           { key: "alt", label: "Texto alternativo" },
           { key: "status", label: "Estado", type: "select", options: [
             { value: "active", label: "Visible" },

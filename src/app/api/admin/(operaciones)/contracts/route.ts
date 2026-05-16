@@ -6,7 +6,8 @@ import type { ServiceContract } from "@/types/admin";
 const store = createCrudStore<ServiceContract>("contracts", contractSchema);
 
 export async function GET() {
-  if (!(await hasModuleAccess("contracts-shifts"))) return NextResponse.json({ ok: false, error: "No autorizado." }, { status: 401 });
+  const canReadContracts = await Promise.all(["contracts-shifts", "machines"].map((module) => hasModuleAccess(module)));
+  if (!canReadContracts.some(Boolean)) return NextResponse.json({ ok: false, error: "No autorizado." }, { status: 401 });
   try {
     return NextResponse.json({ ok: true, items: await store.list() });
   } catch (error) {

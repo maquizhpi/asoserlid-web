@@ -361,7 +361,17 @@ function IntakeForm({
       </div>
 
       <div className="grid gap-4 sm:grid-cols-2">
-        <Field label="Cedula"><input required className={inputClass} value={form.documentId} onChange={(e) => onChange({ ...form, documentId: e.target.value })} /></Field>
+        <Field label="Cedula">
+          <input
+            required
+            inputMode="numeric"
+            maxLength={10}
+            pattern="\d{10}"
+            className={inputClass}
+            value={form.documentId}
+            onChange={(e) => onChange({ ...form, documentId: e.target.value.replace(/\D/g, "").slice(0, 10) })}
+          />
+        </Field>
         <Field label="Nombre completo"><input required className={inputClass} value={form.fullName} onChange={(e) => onChange({ ...form, fullName: e.target.value })} /></Field>
         <Field label="Contacto"><input required className={inputClass} value={form.phone} onChange={(e) => onChange({ ...form, phone: e.target.value })} /></Field>
         <Field label="Correo"><input required type="email" className={inputClass} value={form.email || ""} onChange={(e) => onChange({ ...form, email: e.target.value })} /></Field>

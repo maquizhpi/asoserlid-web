@@ -9,7 +9,7 @@ const requirements = [
   {
     story: "Como administrador quiero crear roles especificos para limitar el acceso segun el cargo",
     priority: "Alta",
-    criteria: "Existen roles: administrador, supervisor, operaciones, RR. HH., contabilidad, cliente y trabajador.",
+    criteria: "Existen roles: administrador, supervisor, operaciones, RR. HH., contabilidad, publicidad, cliente y trabajador.",
   },
   {
     story: "Como administrador quiero crear, editar, activar y desactivar usuarios",
@@ -40,4 +40,3 @@ export default function RolesPage() {
     </SystemModulePage>
   );
 }
-

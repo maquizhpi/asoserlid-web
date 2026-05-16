@@ -26,7 +26,7 @@ const weekDays = ["Dom", "Lun", "Mar", "Mie", "Jue", "Vie", "Sab"];
 export default function ProcessCalendarPage() {
   const [processes, setProcesses] = useState<HiringProcess[]>([]);
   const [status, setStatus] = useState<string | null>(null);
-  const [view, setView] = useState<CalendarView>("week");
+  const [view, setView] = useState<CalendarView>("month");
   const [cursor, setCursor] = useState(() => new Date());
   const [filters, setFilters] = useState({ estado: "", proceso: "", tipo: "" });
 
@@ -138,31 +138,52 @@ export default function ProcessCalendarPage() {
 
 function CalendarGrid({ dates, events, view }: { dates: Date[]; events: CalendarEvent[]; view: CalendarView }) {
   const compact = view === "day";
+  const monthCursor = dates.find((date) => date.getDate() === 1) || dates[0] || new Date();
   return (
     <section className="mt-6 overflow-hidden rounded-lg border border-slate-200 bg-white shadow-sm">
-      <div className={`grid bg-slate-50 text-center text-xs font-bold uppercase tracking-[0.08em] text-slate-500 ${compact ? "grid-cols-1" : "grid-cols-7"}`}>
-        {dates.map((date) => (
-          <div key={toDateKey(date)} className="border-b border-r border-slate-200 px-3 py-3 last:border-r-0">
-            <span>{weekDays[date.getDay()]}</span>
-            <span className="ml-2 text-[#173C61]">{date.getDate()}</span>
+      <div className={`grid border-b border-slate-200 bg-white text-center text-xs font-bold uppercase tracking-[0.08em] text-slate-500 ${compact ? "grid-cols-1" : "grid-cols-7"}`}>
+        {(compact ? [dates[0]] : weekDays).map((day, index) => (
+          <div key={typeof day === "string" ? day : toDateKey(day)} className="border-r border-slate-100 px-3 py-3 last:border-r-0">
+            {compact && day instanceof Date ? `${weekDays[day.getDay()]} ${day.getDate()}` : weekDays[index]}
           </div>
         ))}
       </div>
-      <div className={`grid ${compact ? "grid-cols-1" : "min-h-[36rem] grid-cols-7"}`}>
+      <div className={`grid ${compact ? "grid-cols-1" : "grid-cols-7"}`}>
         {dates.map((date) => {
           const key = toDateKey(date);
           const dayEvents = events.filter((event) => event.date === key);
+          const outsideMonth = view === "month" && date.getMonth() !== monthCursor.getMonth();
+          const today = key === toDateKey(new Date());
           return (
-            <div key={key} className="min-h-40 border-r border-slate-200 p-2 last:border-r-0">
-              <div className="space-y-2">
-                {dayEvents.map((event) => <EventCard key={event.id} event={event} />)}
-                {dayEvents.length === 0 && <p className="py-8 text-center text-xs text-slate-400">Sin eventos</p>}
+            <div key={key} className={`min-h-[8.5rem] border-b border-r border-slate-100 p-1.5 last:border-r-0 ${outsideMonth ? "bg-slate-50/70" : "bg-white"} ${compact ? "min-h-[34rem]" : ""}`}>
+              <div className="mb-1 flex items-center justify-between">
+                <span className={`grid h-7 min-w-7 place-items-center rounded-full px-1 text-sm font-bold ${today ? "bg-[#173C61] text-white" : outsideMonth ? "text-slate-400" : "text-slate-700"}`}>
+                  {date.getDate()}
+                </span>
+                {dayEvents.length > 0 && <span className="pr-1 text-[11px] font-bold text-slate-400">{dayEvents.length}</span>}
+              </div>
+              <div className="space-y-1">
+                {dayEvents.slice(0, compact ? 12 : 4).map((event) => <CalendarEventChip key={event.id} event={event} />)}
+                {dayEvents.length > (compact ? 12 : 4) && <p className="truncate px-1 text-xs font-bold text-[#173C61]">+{dayEvents.length - (compact ? 12 : 4)} mas</p>}
               </div>
             </div>
           );
         })}
       </div>
     </section>
+  );
+}
+
+function CalendarEventChip({ event }: { event: CalendarEvent }) {
+  return (
+    <Link
+      href="/admin/procesos-contratacion"
+      title={`${event.title} - ${event.processNumber}`}
+      className={`block rounded px-2 py-1 text-xs font-semibold leading-tight ${eventChipTone(event)}`}
+    >
+      <span className="mr-1 font-bold">{event.time?.slice(0, 5) || "--:--"}</span>
+      <span className="align-middle">{event.title}</span>
+    </Link>
   );
 }
 
@@ -267,12 +288,21 @@ function eventTone(status: string) {
   return "border-slate-200 bg-slate-50 text-slate-700";
 }
 
+function eventChipTone(event: CalendarEvent) {
+  if (event.status === "Vencida" || event.status === "Vencido") return "bg-red-100 text-red-800 hover:bg-red-200";
+  if (event.status === "Hoy" || event.status === "Proxima" || event.priority === "Alta") return "bg-amber-100 text-amber-900 hover:bg-amber-200";
+  if (event.status === "Cumplida" || event.status === "Cumplido") return "bg-emerald-100 text-emerald-900 hover:bg-emerald-200";
+  if (event.type === "Agenda") return "bg-cyan-100 text-[#173C61] hover:bg-cyan-200";
+  return "bg-slate-100 text-slate-800 hover:bg-slate-200";
+}
+
 function sortEvents(a: CalendarEvent, b: CalendarEvent) {
   return `${a.date} ${a.time}`.localeCompare(`${b.date} ${b.time}`);
 }
 
 function toDateKey(date: Date) {
-  return date.toISOString().slice(0, 10);
+  const pad = (value: number) => String(value).padStart(2, "0");
+  return `${date.getFullYear()}-${pad(date.getMonth() + 1)}-${pad(date.getDate())}`;
 }
 
 function startOfDay(date: Date) {

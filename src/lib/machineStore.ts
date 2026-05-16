@@ -20,6 +20,8 @@ const machineSchema = z.object({
   status: z.enum(["available", "assigned", "maintenance", "inactive"]).default("available"),
   location: z.string().trim().optional().or(z.literal("")),
   assignedTo: z.string().trim().optional().or(z.literal("")),
+  ownerWorkGroupId: z.string().trim().optional().or(z.literal("")),
+  ownerWorkGroupName: z.string().trim().optional().or(z.literal("")),
   notes: z.string().trim().optional().or(z.literal("")),
 });
 
@@ -164,6 +166,8 @@ function normalizeMachine(machine: z.infer<typeof machineSchema>) {
     photoPublicId: machine.photoPublicId || undefined,
     location: machine.location || undefined,
     assignedTo: machine.assignedTo || undefined,
+    ownerWorkGroupId: machine.ownerWorkGroupId || undefined,
+    ownerWorkGroupName: machine.ownerWorkGroupName || undefined,
     notes: machine.notes || undefined,
   };
 }

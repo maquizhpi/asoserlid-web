@@ -1,6 +1,6 @@
 {
-  "name": "socialite-web",
-  "version": "2.3.1",
+  "name": "sit-sistema-integrado-trabajo",
+  "version": "2.4.0",
   "private": true,
   "scripts": {
     "dev": "next dev --turbopack",

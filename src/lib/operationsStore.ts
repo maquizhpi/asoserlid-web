@@ -20,14 +20,27 @@ const optionalNumber = z.preprocess(
   (value) => (value === "" || value === null || value === undefined ? undefined : value),
   z.coerce.number().min(0).optional()
 );
+const optionalEmail = (message: string) => z.preprocess(
+  (value) => (value === "" || value === null || value === undefined ? undefined : value),
+  z.string().trim().email(message).optional()
+);
+const documentIdText = z
+  .string()
+  .trim()
+  .regex(/^\d{10}$/, "La cedula debe tener 10 digitos numericos.");
 
 export const workerSchema = z.object({
-  documentId: text("La cedula es obligatoria."),
+  documentId: documentIdText,
   firstName: text("Los nombres son obligatorios."),
   lastName: text("Los apellidos son obligatorios."),
   position: text("El cargo es obligatorio."),
   phone: text("El contacto es obligatorio."),
   email: z.string().email("El correo no es valido.").optional().or(z.literal("")),
+  photoUrl: optionalText,
+  photoPublicId: optionalText,
+  bankName: optionalText,
+  bankAccountType: optionalText,
+  bankAccountNumber: optionalText,
   status: z.enum(["active", "inactive"]).default("active"),
   documents: optionalText,
   assignedClientId: optionalText,
@@ -39,6 +52,90 @@ export const workerSchema = z.object({
   supervisor: optionalText,
   workGroupId: optionalText,
   workGroupName: optionalText,
+  talentProfile: z.object({
+    completed: z.boolean().optional().default(false),
+    completedAt: optionalText,
+    currentDate: optionalText,
+    birthDate: optionalText,
+    age: optionalNumber,
+    civilStatus: optionalText,
+    homePhone: optionalText,
+    hasConadisCard: optionalText,
+    bloodType: optionalText,
+    experienceYears: optionalNumber,
+    province: optionalText,
+    canton: optionalText,
+    parish: optionalText,
+    zone: optionalText,
+    mainStreet: optionalText,
+    secondaryStreet: optionalText,
+    houseNumber: optionalText,
+    shirtSize: optionalText,
+    pantsSize: optionalText,
+    shoeSize: optionalText,
+    familyLoads: z.array(z.object({
+      id: idText,
+      type: z.string().trim().default(""),
+      fullName: z.string().trim().default(""),
+      documentId: optionalText,
+      birthDate: optionalText,
+      age: optionalNumber,
+      conadisCard: optionalText,
+    }).strip()).default([]),
+    education: z.array(z.object({
+      id: idText,
+      level: z.string().trim().default(""),
+      completed: optionalText,
+      institution: optionalText,
+      title: optionalText,
+    }).strip()).default([]),
+    mainCourses: optionalText,
+    additionalKnowledge: optionalText,
+    workHistory: z.array(z.object({
+      id: idText,
+      position: optionalText,
+      employer: optionalText,
+      workTime: optionalText,
+      startDate: optionalText,
+      endDate: optionalText,
+      phone: optionalText,
+      exitReason: optionalText,
+    }).strip()).default([]),
+    trainings: z.array(z.object({
+      id: idText,
+      name: z.string().trim().default(""),
+      description: optionalText,
+      placeOrCompany: optionalText,
+      date: optionalText,
+    }).strip()).default([]),
+    personalReferences: z.array(z.object({
+      id: idText,
+      name: z.string().trim().default(""),
+      relationship: optionalText,
+      phone: optionalText,
+      residence: optionalText,
+    }).strip()).default([]),
+    declarationAccepted: z.boolean().optional().default(false),
+  }).strip().optional(),
+  eppDelivery: z.object({
+    completed: z.boolean().optional().default(false),
+    deliveryDate: optionalText,
+    period: optionalText,
+    employer: optionalText,
+    contractId: optionalText,
+    contractName: optionalText,
+    workplace: optionalText,
+    representativeName: optionalText,
+    observations: optionalText,
+    generatedAt: optionalText,
+    items: z.array(z.object({
+      id: idText,
+      name: z.string().trim().default(""),
+      quantity: optionalNumber,
+      delivered: z.boolean().optional().default(false),
+      notes: optionalText,
+    }).strip()).default([]),
+  }).strip().optional(),
 }).strip();
 
 export const employeePositionSchema = z.object({
@@ -97,6 +194,7 @@ const contractShiftSchema = z.object({
   shiftName: text("El nombre del turno es obligatorio."),
   startTime: z.string().min(4, "La hora de inicio es obligatoria.").trim(),
   endTime: z.string().min(4, "La hora de fin es obligatoria.").trim(),
+  lunchBreakMinutes: optionalNumber,
   workDays: z.array(z.string()).default([]),
   observation: optionalText,
   status: z.enum(["active", "inactive"]).default("active"),
@@ -129,6 +227,10 @@ const contractWorkplaceSchema = z.object({
 export const contractSchema = z.object({
   clientId: optionalText,
   clientName: text("El cliente es obligatorio."),
+  contractNumber: optionalText,
+  contractAdministrator: optionalText,
+  contractAdministratorEmail: optionalEmail("El correo del administrador no es valido."),
+  contractAdministratorPhone: optionalText,
   serviceType: text("El tipo de servicio es obligatorio."),
   area: optionalText,
   shift: optionalText,
@@ -152,6 +254,7 @@ const supervisorReportStaffSchema = z.object({
   position: optionalText,
   startTime: optionalText,
   endTime: optionalText,
+  lunchBreakMinutes: optionalNumber,
   totalHours: optionalNumber,
   normalHours: optionalNumber,
   overtimeHours: optionalNumber,
@@ -161,6 +264,10 @@ const supervisorReportStaffSchema = z.object({
   permissionHours: optionalNumber,
   sicknessHours: optionalNumber,
   attendanceStatus: z.enum(["attended", "absent", "permission", "sick", "late", "replacement"]),
+  supportDocumentSubject: optionalText,
+  supportDocumentUrl: optionalText,
+  supportDocumentPublicId: optionalText,
+  supportDocumentName: optionalText,
   notes: optionalText,
 }).strip();
 
@@ -185,6 +292,7 @@ export const supervisorReportSchema = z.object({
   workGroupName: optionalText,
   startTime: optionalText,
   endTime: optionalText,
+  lunchBreakMinutes: optionalNumber,
   totalHours: optionalNumber,
   normalHours: optionalNumber,
   overtimeHours: optionalNumber,
@@ -201,7 +309,7 @@ export const supervisorReportSchema = z.object({
 }).strip();
 
 export const workerIntakeSchema = z.object({
-  documentId: text("La cedula es obligatoria."),
+  documentId: documentIdText,
   fullName: text("El nombre completo es obligatorio."),
   phone: text("El contacto es obligatorio."),
   email: z.string().email("El correo no es valido.").trim(),
@@ -260,6 +368,30 @@ export const supplyKitSchema = z.object({
   status: z.enum(["active", "inactive"]).default("active"),
 }).strip();
 
+const supplyKitDeliveryItemSchema = supplyKitItemSchema.extend({
+  source: z.enum(["base", "extra"]).default("base"),
+}).strip();
+
+export const supplyKitDeliverySchema = z.object({
+  kitId: text("El kit es obligatorio."),
+  kitCode: optionalText,
+  period: z.string().min(7, "El periodo mensual es obligatorio.").trim(),
+  clientId: optionalText,
+  clientName: text("El cliente es obligatorio."),
+  contractId: optionalText,
+  contractName: optionalText,
+  workplaceId: optionalText,
+  workplaceName: optionalText,
+  supervisorId: optionalText,
+  supervisorName: optionalText,
+  items: z.array(supplyKitDeliveryItemSchema).default([]),
+  totalQuantity: z.coerce.number().min(0).default(0),
+  responsible: optionalText,
+  deliveryDate: z.string().min(10, "La fecha de entrega es obligatoria.").trim(),
+  notes: optionalText,
+  status: z.enum(["draft", "delivered", "cancelled"]).default("draft"),
+}).strip();
+
 export const supplyProductSchema = z.object({
   code: text("El codigo es obligatorio."),
   auxiliaryCode: optionalText,
@@ -302,7 +434,12 @@ export const hiringProcessSchema = z.object({
   vigenciaOfertaDias: optionalNumber,
   funcionarioEncargado: optionalText,
   areaResponsable: z.string().trim().default("Sin area"),
+  workGroupId: optionalText,
+  workGroupName: optionalText,
+  processOwner: optionalText,
   estadoProceso: z.enum(["Planificado", "En seguimiento", "Por vencer", "Vencido", "Adjudicado", "Desierto", "Cancelado", "Finalizado"]).default("Planificado"),
+  winningCompany: optionalText,
+  winningPrice: optionalNumber,
   descripcion: optionalText,
   notas: optionalText,
   fechaInicio: z.string().min(10, "La fecha de inicio es obligatoria.").trim(),
@@ -350,10 +487,11 @@ export const hiringProcessSchema = z.object({
 
 export const notificationSchema = z.object({
   title: text("El titulo es obligatorio."),
-  role: z.enum(["administrator", "supervisor", "operations", "human_resources", "accounting", "client", "worker", "all"]),
+  role: z.enum(["administrator", "supervisor", "operations", "human_resources", "accounting", "advertising", "legal_representative", "client", "worker", "all"]),
   message: text("El mensaje es obligatorio."),
   dueDate: optionalText,
   status: z.enum(["active", "read", "archived"]).default("active"),
+  acknowledgedBy: z.array(z.string().trim()).default([]),
 }).strip();
 
 export const galleryImageSchema = z.object({

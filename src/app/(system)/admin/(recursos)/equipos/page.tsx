@@ -3,7 +3,7 @@
 import { FormEvent, ReactNode, useEffect, useMemo, useState } from "react";
 import SearchableSelect, { type SelectOption } from "@/components/system/SearchableSelect";
 import SystemModulePage from "@/components/system/SystemModulePage";
-import type { Machine, MachineCustodyReceipt, MachineEnvironment, MachineStatus, MachineUsageLog } from "@/types/admin";
+import type { Client, Machine, MachineCustodyReceipt, MachineEnvironment, MachineStatus, MachineUsageLog, ServiceContract, Worker } from "@/types/admin";
 
 const emptyMachine: Machine = {
   name: "",
@@ -13,6 +13,8 @@ const emptyMachine: Machine = {
   status: "available",
   location: "",
   assignedTo: "",
+  ownerWorkGroupId: "",
+  ownerWorkGroupName: "",
   notes: "",
   photoUrl: "",
   photoPublicId: "",
@@ -76,11 +78,17 @@ const environmentLabels: Record<MachineEnvironment, string> = {
   other: "Otro",
 };
 
+const conditionOptions = ["Bueno", "Regular", "Dañado"];
+
 type PanelMode = "list" | "form";
 
 export default function EquipmentModulePage() {
   const [machines, setMachines] = useState<Machine[]>([]);
   const [supervisors, setSupervisors] = useState<SelectOption[]>([]);
+  const [workGroups, setWorkGroups] = useState<SelectOption[]>([]);
+  const [workers, setWorkers] = useState<SelectOption[]>([]);
+  const [clients, setClients] = useState<SelectOption[]>([]);
+  const [contractAreaOptions, setContractAreaOptions] = useState<SelectOption[]>([]);
   const [query, setQuery] = useState("");
   const [selectedMachineId, setSelectedMachineId] = useState<string | null>(null);
   const [machineMode, setMachineMode] = useState<PanelMode>("list");
@@ -102,7 +110,7 @@ export default function EquipmentModulePage() {
     if (!term) return machines;
 
     return machines.filter((machine) =>
-      [machine.name, machine.code, machine.type, machine.location, machine.assignedTo]
+      [machine.name, machine.code, machine.type, machine.location, machine.assignedTo, machine.ownerWorkGroupName]
         .filter(Boolean)
         .some((value) => String(value).toLowerCase().includes(term))
     );
@@ -119,17 +127,43 @@ export default function EquipmentModulePage() {
   }, [machines, selectedMachine]);
 
   async function loadMachines() {
-    const [machinesRes, supervisorsRes] = await Promise.all([
+    const [machinesRes, supervisorsRes, workGroupsRes, workersRes, clientsRes, contractsRes] = await Promise.all([
       fetch("/api/admin/machines", { cache: "no-store" }),
       fetch("/api/admin/supervisors", { cache: "no-store" }),
+      fetch("/api/admin/work-groups", { cache: "no-store" }),
+      fetch("/api/admin/workers", { cache: "no-store" }),
+      fetch("/api/admin/clients", { cache: "no-store" }),
+      fetch("/api/admin/contracts", { cache: "no-store" }),
     ]);
     const machinesData = await machinesRes.json().catch(() => ({}));
     const supervisorsData = await supervisorsRes.json().catch(() => ({}));
+    const workGroupsData = await workGroupsRes.json().catch(() => ({}));
+    const workersData = await workersRes.json().catch(() => ({}));
+    const clientsData = await clientsRes.json().catch(() => ({}));
+    const contractsData = await contractsRes.json().catch(() => ({}));
     if (machinesRes.ok) setMachines(machinesData.machines || []);
     if (supervisorsRes.ok) {
       setSupervisors((supervisorsData.items || []).map((item: { id: string; name: string }) => ({ value: item.id, label: item.name })));
     }
-    if (!machinesRes.ok || !supervisorsRes.ok) setStatus(machinesData.error || supervisorsData.error || "No autorizado.");
+    if (workGroupsRes.ok) {
+      setWorkGroups((workGroupsData.items || []).map((item: { _id?: string; name: string }) => ({ value: item._id || item.name, label: item.name })));
+    }
+    if (workersRes.ok) {
+      setWorkers((workersData.items || []).filter((worker: Worker) => worker.status === "active").map((worker: Worker) => ({
+        value: worker._id || worker.documentId,
+        label: `${worker.firstName} ${worker.lastName}`.trim(),
+      })));
+    }
+    if (clientsRes.ok) {
+      setClients((clientsData.items || []).filter((client: Client) => client.status === "active").map((client: Client) => ({
+        value: client._id || client.taxId,
+        label: client.name,
+      })));
+    }
+    if (contractsRes.ok) {
+      setContractAreaOptions(buildContractAreaOptions(contractsData.items || []));
+    }
+    if (!machinesRes.ok || !supervisorsRes.ok || !workGroupsRes.ok || !workersRes.ok || !clientsRes.ok || !contractsRes.ok) setStatus(machinesData.error || supervisorsData.error || workGroupsData.error || workersData.error || clientsData.error || contractsData.error || "No autorizado.");
   }
 
   function startNewMachine() {
@@ -326,6 +360,7 @@ export default function EquipmentModulePage() {
             <MachineForm
               machineForm={machineForm}
               supervisors={supervisors}
+              workGroups={workGroups}
               uploading={uploading}
               onCancel={() => setMachineMode("list")}
               onDelete={deleteMachine}
@@ -343,6 +378,8 @@ export default function EquipmentModulePage() {
                 mode={usageMode}
                 machine={selectedMachine}
                 usageForm={usageForm}
+                workers={workers}
+                clients={clients}
                 onNew={startNewUsageLog}
                 onCancel={() => setUsageMode("list")}
                 onSubmit={saveUsageLog}
@@ -352,6 +389,8 @@ export default function EquipmentModulePage() {
                 mode={custodyMode}
                 machine={selectedMachine}
                 custodyForm={custodyForm}
+                workers={workers}
+                contractAreaOptions={contractAreaOptions}
                 uploading={uploading}
                 onNew={startNewCustodyReceipt}
                 onCancel={() => setCustodyMode("list")}
@@ -400,6 +439,7 @@ function MachineDetail({ machine, onEdit, onNew }: { machine?: Machine; onEdit: 
             <Info label="Tipo" value={machine.type} />
             <Info label="Estado" value={statusLabels[machine.status]} />
             <Info label="Uso principal" value={environmentLabels[machine.environment]} />
+            <Info label="Propietario" value={machine.ownerWorkGroupName || "-"} />
             <Info label="Ubicacion" value={machine.location || "-"} />
             <Info label="Responsable" value={machine.assignedTo || "-"} />
             <Info label="Notas" value={machine.notes || "-"} />
@@ -413,6 +453,7 @@ function MachineDetail({ machine, onEdit, onNew }: { machine?: Machine; onEdit: 
 function MachineForm({
   machineForm,
   supervisors,
+  workGroups,
   uploading,
   onChange,
   onSubmit,
@@ -422,6 +463,7 @@ function MachineForm({
 }: {
   machineForm: Machine;
   supervisors: SelectOption[];
+  workGroups: SelectOption[];
   uploading: boolean;
   onChange: (machine: Machine) => void;
   onSubmit: (e: FormEvent) => void;
@@ -491,6 +533,13 @@ function MachineForm({
           <input className={inputClass} value={machineForm.location || ""} onChange={(e) => onChange({ ...machineForm, location: e.target.value })} />
         </Field>
         <SearchableSelect
+          label="Propietario"
+          value={machineForm.ownerWorkGroupId || ""}
+          options={workGroups}
+          placeholder="Buscar grupo de trabajo..."
+          onChange={(option) => onChange({ ...machineForm, ownerWorkGroupId: option?.value || "", ownerWorkGroupName: option?.label || "" })}
+        />
+        <SearchableSelect
           label="Responsable"
           value={supervisors.find((option) => option.label === machineForm.assignedTo)?.value || ""}
           options={supervisors}
@@ -515,6 +564,8 @@ function UsagePanel({
   mode,
   machine,
   usageForm,
+  workers,
+  clients,
   onNew,
   onCancel,
   onSubmit,
@@ -523,11 +574,14 @@ function UsagePanel({
   mode: PanelMode;
   machine: Machine;
   usageForm: MachineUsageLog;
+  workers: SelectOption[];
+  clients: SelectOption[];
   onNew: () => void;
   onCancel: () => void;
   onSubmit: (e: FormEvent) => void;
   onChange: (log: MachineUsageLog) => void;
 }) {
+  const [selectedLog, setSelectedLog] = useState<MachineUsageLog | null>(null);
   return (
     <section className="rounded-lg border border-slate-200 bg-white p-5 shadow-sm">
       <div className="mb-4 flex items-center justify-between gap-3">
@@ -542,23 +596,44 @@ function UsagePanel({
       {mode === "list" ? (
         <div className="space-y-2">
           {machine.usageLogs?.map((log) => (
-            <article key={log._id} className="rounded-md border border-slate-200 bg-slate-50 px-3 py-2 text-sm text-slate-700">
+            <button key={log._id} type="button" onClick={() => setSelectedLog(log)} className="w-full rounded-md border border-slate-200 bg-slate-50 px-3 py-2 text-left text-sm text-slate-700 hover:border-[#33C3C9] hover:bg-[#E6F8F9]">
               <strong>{log.date}</strong> - {log.usedBy} - {log.hoursUsed} h - {log.clientOrLocation}
-            </article>
+            </button>
           ))}
           {!machine.usageLogs?.length && <p className="rounded-md bg-slate-50 px-4 py-3 text-sm text-slate-500">Sin registros de uso.</p>}
+          {selectedLog && <UsageLogModal machine={machine} log={selectedLog} onClose={() => setSelectedLog(null)} />}
         </div>
       ) : (
         <form onSubmit={onSubmit}>
           <div className="grid gap-4 sm:grid-cols-2">
             <Field label="Fecha"><input type="date" required className={inputClass} value={usageForm.date} onChange={(e) => onChange({ ...usageForm, date: e.target.value })} /></Field>
-            <Field label="Quien uso"><input required className={inputClass} value={usageForm.usedBy} onChange={(e) => onChange({ ...usageForm, usedBy: e.target.value })} /></Field>
-            <Field label="Cliente o ubicacion"><input required className={inputClass} value={usageForm.clientOrLocation} onChange={(e) => onChange({ ...usageForm, clientOrLocation: e.target.value })} /></Field>
+            <SearchableSelect
+              label="Quien uso"
+              value={workers.find((option) => option.label === usageForm.usedBy)?.value || ""}
+              options={workers}
+              placeholder="Buscar trabajador..."
+              onChange={(option) => onChange({ ...usageForm, usedBy: option?.label || "" })}
+            />
+            <SearchableSelect
+              label="Cliente"
+              value={clients.find((option) => option.label === usageForm.clientOrLocation)?.value || ""}
+              options={clients}
+              placeholder="Buscar cliente registrado..."
+              onChange={(option) => onChange({ ...usageForm, clientOrLocation: option?.label || "" })}
+            />
             <Field label="Horas usadas"><input type="number" min="0" step="0.25" required className={inputClass} value={usageForm.hoursUsed} onChange={(e) => onChange({ ...usageForm, hoursUsed: Number(e.target.value) })} /></Field>
             <Field label="Hora inicio"><input type="time" required className={inputClass} value={usageForm.startTime} onChange={(e) => onChange({ ...usageForm, startTime: e.target.value })} /></Field>
             <Field label="Hora fin"><input type="time" required className={inputClass} value={usageForm.endTime} onChange={(e) => onChange({ ...usageForm, endTime: e.target.value })} /></Field>
-            <Field label="Estado inicial"><input required className={inputClass} value={usageForm.conditionBefore} onChange={(e) => onChange({ ...usageForm, conditionBefore: e.target.value })} /></Field>
-            <Field label="Estado final"><input required className={inputClass} value={usageForm.conditionAfter} onChange={(e) => onChange({ ...usageForm, conditionAfter: e.target.value })} /></Field>
+            <Field label="Estado inicial">
+              <select required className={inputClass} value={usageForm.conditionBefore} onChange={(e) => onChange({ ...usageForm, conditionBefore: e.target.value })}>
+                {conditionOptions.map((condition) => <option key={condition} value={condition}>{condition}</option>)}
+              </select>
+            </Field>
+            <Field label="Estado final">
+              <select required className={inputClass} value={usageForm.conditionAfter} onChange={(e) => onChange({ ...usageForm, conditionAfter: e.target.value })}>
+                {conditionOptions.map((condition) => <option key={condition} value={condition}>{condition}</option>)}
+              </select>
+            </Field>
           </div>
           <Field label="Observaciones"><textarea className={`${inputClass} mt-4 min-h-24`} value={usageForm.observations || ""} onChange={(e) => onChange({ ...usageForm, observations: e.target.value })} /></Field>
           <button className="mt-4 rounded-md bg-[#173C61] px-5 py-3 font-semibold text-white hover:bg-[#218F93]">Guardar bitacora</button>
@@ -572,6 +647,8 @@ function CustodyPanel({
   mode,
   machine,
   custodyForm,
+  workers,
+  contractAreaOptions,
   uploading,
   onNew,
   onCancel,
@@ -582,6 +659,8 @@ function CustodyPanel({
   mode: PanelMode;
   machine: Machine;
   custodyForm: MachineCustodyReceipt;
+  workers: SelectOption[];
+  contractAreaOptions: SelectOption[];
   uploading: boolean;
   onNew: () => void;
   onCancel: () => void;
@@ -589,6 +668,7 @@ function CustodyPanel({
   onDocumentUpload: (file: File) => void;
   onChange: (receipt: MachineCustodyReceipt) => void;
 }) {
+  const [selectedReceipt, setSelectedReceipt] = useState<MachineCustodyReceipt | null>(null);
   return (
     <section className="rounded-lg border border-slate-200 bg-white p-5 shadow-sm">
       <div className="mb-4 flex items-center justify-between gap-3">
@@ -603,24 +683,53 @@ function CustodyPanel({
       {mode === "list" ? (
         <div className="space-y-2">
           {machine.custodyReceipts?.map((receipt) => (
-            <article key={receipt._id} className="rounded-md border border-slate-200 bg-slate-50 px-3 py-2 text-sm text-slate-700">
+            <button key={receipt._id} type="button" onClick={() => setSelectedReceipt(receipt)} className="w-full rounded-md border border-slate-200 bg-slate-50 px-3 py-2 text-left text-sm text-slate-700 hover:border-[#33C3C9] hover:bg-[#E6F8F9]">
               <strong>{receipt.date}</strong> - {receipt.origin} a {receipt.destination} - recibe {receipt.receivedBy}
-              {receipt.documentUrl && <a href={receipt.documentUrl} target="_blank" className="ml-2 font-semibold text-[#173C61]">Ver soporte</a>}
-            </article>
+              {receipt.documentUrl && <span className="ml-2 font-semibold text-[#173C61]">Con soporte</span>}
+            </button>
           ))}
           {!machine.custodyReceipts?.length && <p className="rounded-md bg-slate-50 px-4 py-3 text-sm text-slate-500">Sin recibos de custodia.</p>}
+          {selectedReceipt && <CustodyReceiptModal machine={machine} receipt={selectedReceipt} onClose={() => setSelectedReceipt(null)} />}
         </div>
       ) : (
         <form onSubmit={onSubmit}>
           <div className="grid gap-4 sm:grid-cols-2">
             <Field label="Fecha"><input type="date" required className={inputClass} value={custodyForm.date} onChange={(e) => onChange({ ...custodyForm, date: e.target.value })} /></Field>
             <Field label="Retorno esperado"><input type="date" className={inputClass} value={custodyForm.expectedReturnDate || ""} onChange={(e) => onChange({ ...custodyForm, expectedReturnDate: e.target.value })} /></Field>
-            <Field label="Entrega"><input required className={inputClass} value={custodyForm.deliveredBy} onChange={(e) => onChange({ ...custodyForm, deliveredBy: e.target.value })} /></Field>
-            <Field label="Recibe"><input required className={inputClass} value={custodyForm.receivedBy} onChange={(e) => onChange({ ...custodyForm, receivedBy: e.target.value })} /></Field>
-            <Field label="Origen"><input required className={inputClass} value={custodyForm.origin} onChange={(e) => onChange({ ...custodyForm, origin: e.target.value })} /></Field>
-            <Field label="Destino"><input required className={inputClass} value={custodyForm.destination} onChange={(e) => onChange({ ...custodyForm, destination: e.target.value })} /></Field>
+            <SearchableSelect
+              label="Entrega"
+              value={workers.find((option) => option.label === custodyForm.deliveredBy)?.value || ""}
+              options={workers}
+              placeholder="Buscar trabajador que entrega..."
+              onChange={(option) => onChange({ ...custodyForm, deliveredBy: option?.label || "" })}
+            />
+            <SearchableSelect
+              label="Recibe"
+              value={workers.find((option) => option.label === custodyForm.receivedBy)?.value || ""}
+              options={workers}
+              placeholder="Buscar trabajador que recibe..."
+              onChange={(option) => onChange({ ...custodyForm, receivedBy: option?.label || "" })}
+            />
+            <SearchableSelect
+              label="Origen"
+              value={contractAreaOptions.find((option) => option.label === custodyForm.origin)?.value || ""}
+              options={contractAreaOptions}
+              placeholder="Buscar contrato / lugar / area..."
+              onChange={(option) => onChange({ ...custodyForm, origin: option?.label || "" })}
+            />
+            <SearchableSelect
+              label="Destino"
+              value={contractAreaOptions.find((option) => option.label === custodyForm.destination)?.value || ""}
+              options={contractAreaOptions}
+              placeholder="Buscar contrato / lugar / area..."
+              onChange={(option) => onChange({ ...custodyForm, destination: option?.label || "" })}
+            />
             <Field label="Motivo"><input required className={inputClass} value={custodyForm.reason} onChange={(e) => onChange({ ...custodyForm, reason: e.target.value })} /></Field>
-            <Field label="Estado del equipo"><input required className={inputClass} value={custodyForm.condition} onChange={(e) => onChange({ ...custodyForm, condition: e.target.value })} /></Field>
+            <Field label="Estado del equipo">
+              <select required className={inputClass} value={custodyForm.condition} onChange={(e) => onChange({ ...custodyForm, condition: e.target.value })}>
+                {conditionOptions.map((condition) => <option key={condition} value={condition}>{condition}</option>)}
+              </select>
+            </Field>
           </div>
           <Field label="PDF o foto del recibo">
             <input
@@ -644,6 +753,71 @@ function CustodyPanel({
   );
 }
 
+function UsageLogModal({ machine, log, onClose }: { machine: Machine; log: MachineUsageLog; onClose: () => void }) {
+  return (
+    <DetailModal title="Detalle de bitacora de uso" onClose={onClose} onPrint={() => printUsageLog(machine, log)}>
+      <div className="grid gap-3 sm:grid-cols-2">
+        <InfoCard label="Equipo" value={`${machine.name} (${machine.code})`} />
+        <InfoCard label="Fecha" value={log.date} />
+        <InfoCard label="Quien uso" value={log.usedBy} />
+        <InfoCard label="Cliente" value={log.clientOrLocation} />
+        <InfoCard label="Hora inicio" value={log.startTime} />
+        <InfoCard label="Hora fin" value={log.endTime} />
+        <InfoCard label="Horas usadas" value={`${log.hoursUsed} h`} />
+        <InfoCard label="Estado inicial" value={log.conditionBefore} />
+        <InfoCard label="Estado final" value={log.conditionAfter} />
+        <InfoCard label="Observaciones" value={log.observations || "-"} wide />
+      </div>
+    </DetailModal>
+  );
+}
+
+function CustodyReceiptModal({ machine, receipt, onClose }: { machine: Machine; receipt: MachineCustodyReceipt; onClose: () => void }) {
+  return (
+    <DetailModal title="Detalle de recibo de custodia" onClose={onClose} onPrint={() => printCustodyReceipt(machine, receipt)}>
+      <div className="grid gap-3 sm:grid-cols-2">
+        <InfoCard label="Equipo" value={`${machine.name} (${machine.code})`} />
+        <InfoCard label="Fecha" value={receipt.date} />
+        <InfoCard label="Retorno esperado" value={receipt.expectedReturnDate || "-"} />
+        <InfoCard label="Entrega" value={receipt.deliveredBy} />
+        <InfoCard label="Recibe" value={receipt.receivedBy} />
+        <InfoCard label="Origen" value={receipt.origin} />
+        <InfoCard label="Destino" value={receipt.destination} />
+        <InfoCard label="Motivo" value={receipt.reason} />
+        <InfoCard label="Estado del equipo" value={receipt.condition} />
+        <InfoCard label="Observaciones" value={receipt.observations || "-"} wide />
+      </div>
+      {receipt.documentUrl && <a href={receipt.documentUrl} target="_blank" rel="noreferrer" className="mt-4 inline-flex rounded-md border border-slate-300 px-4 py-2 text-sm font-bold text-[#173C61] hover:bg-slate-50">Ver soporte cargado</a>}
+    </DetailModal>
+  );
+}
+
+function DetailModal({ title, children, onClose, onPrint }: { title: string; children: ReactNode; onClose: () => void; onPrint: () => void }) {
+  return (
+    <div className="fixed inset-0 z-50 grid place-items-center bg-slate-950/50 px-4 py-6">
+      <section className="max-h-[92vh] w-full max-w-3xl overflow-auto rounded-lg border border-slate-200 bg-white p-5 shadow-xl">
+        <div className="mb-4 flex flex-col justify-between gap-3 sm:flex-row sm:items-start">
+          <h2 className="text-xl font-bold text-[#173C61]">{title}</h2>
+          <div className="flex gap-2">
+            <button type="button" onClick={onPrint} className="rounded-md bg-[#173C61] px-4 py-2 text-sm font-bold text-white hover:bg-[#218F93]">Imprimir</button>
+            <button type="button" onClick={onClose} className="rounded-md border border-slate-300 px-4 py-2 text-sm font-bold text-slate-700 hover:bg-slate-50">Cerrar</button>
+          </div>
+        </div>
+        {children}
+      </section>
+    </div>
+  );
+}
+
+function InfoCard({ label, value, wide }: { label: string; value?: string; wide?: boolean }) {
+  return (
+    <div className={`rounded-md border border-slate-200 bg-slate-50 p-3 ${wide ? "sm:col-span-2" : ""}`}>
+      <p className="text-xs font-bold uppercase tracking-[0.1em] text-slate-500">{label}</p>
+      <p className="mt-1 whitespace-pre-line font-semibold text-[#173C61]">{value || "-"}</p>
+    </div>
+  );
+}
+
 const inputClass =
   "w-full rounded-md border border-slate-300 bg-white px-4 py-3 text-slate-900 outline-none transition placeholder:text-slate-400 focus:border-[#218F93] focus:ring-4 focus:ring-[#33C3C9]/15";
 
@@ -658,4 +832,177 @@ function Info({ label, value }: { label: string; value: string }) {
       <dd className="mt-1 text-slate-800">{value}</dd>
     </div>
   );
+}
+
+function printUsageLog(machine: Machine, log: MachineUsageLog) {
+  printDocument("Bitacora de uso de equipo", [
+    ["Equipo", `${machine.name} (${machine.code})`],
+    ["Fecha", log.date],
+    ["Quien uso", log.usedBy],
+    ["Cliente", log.clientOrLocation],
+    ["Hora inicio", log.startTime],
+    ["Hora fin", log.endTime],
+    ["Horas usadas", `${log.hoursUsed} h`],
+    ["Estado inicial", log.conditionBefore],
+    ["Estado final", log.conditionAfter],
+    ["Observaciones", log.observations || "-"],
+  ]);
+}
+
+function printCustodyReceipt(machine: Machine, receipt: MachineCustodyReceipt) {
+  printCustodyDocument("Recibo de custodia de equipo", [
+    ["Equipo", `${machine.name} (${machine.code})`],
+    ["Tipo", machine.type],
+    ["Propietario", machine.ownerWorkGroupName || "-"],
+    ["Fecha", receipt.date],
+    ["Retorno esperado", receipt.expectedReturnDate || "-"],
+    ["Entrega", receipt.deliveredBy],
+    ["Recibe", receipt.receivedBy],
+    ["Origen", receipt.origin],
+    ["Destino", receipt.destination],
+    ["Motivo", receipt.reason],
+    ["Estado del equipo", receipt.condition],
+    ["Observaciones", receipt.observations || "-"],
+    ["Soporte", receipt.documentUrl || "-"],
+  ], [
+    { label: "Entrega", name: receipt.deliveredBy },
+    { label: "Recibe", name: receipt.receivedBy },
+    { label: "Supervisor", name: machine.assignedTo || "Supervisor" },
+  ]);
+}
+
+function printDocument(title: string, rows: Array<[string, string]>) {
+  const html = `
+    <html>
+      <head>
+        <title>${escapeHtml(title)}</title>
+        <style>
+          body { font-family: Arial, sans-serif; color: #0f2742; padding: 28px; }
+          h1 { font-size: 22px; margin-bottom: 18px; }
+          table { width: 100%; border-collapse: collapse; }
+          th, td { border: 1px solid #cbd5e1; padding: 10px; text-align: left; vertical-align: top; }
+          th { width: 32%; background: #f1f5f9; }
+        </style>
+      </head>
+      <body>
+        <h1>${escapeHtml(title)}</h1>
+        <table>${rows.map(([label, value]) => `<tr><th>${escapeHtml(label)}</th><td>${escapeHtml(value)}</td></tr>`).join("")}</table>
+      </body>
+    </html>
+  `;
+  const win = window.open("", "_blank", "width=900,height=700");
+  if (!win) return;
+  win.document.write(html);
+  win.document.close();
+  win.focus();
+  win.print();
+}
+
+function printCustodyDocument(title: string, rows: Array<[string, string]>, signatures: Array<{ label: string; name: string }>) {
+  const html = `
+    <html>
+      <head>
+        <title>${escapeHtml(title)}</title>
+        <style>
+          * { box-sizing: border-box; }
+          body { font-family: Arial, sans-serif; color: #0f2742; padding: 28px; }
+          .header { display: flex; justify-content: space-between; gap: 16px; border-bottom: 3px solid #173C61; padding-bottom: 14px; margin-bottom: 18px; }
+          .brand { font-size: 12px; font-weight: 700; letter-spacing: 0.12em; text-transform: uppercase; color: #218F93; }
+          h1 { font-size: 22px; margin: 4px 0 0; }
+          .code { border: 1px solid #cbd5e1; padding: 8px 12px; font-size: 12px; font-weight: 700; text-align: right; }
+          table { width: 100%; border-collapse: collapse; margin-top: 14px; }
+          th, td { border: 1px solid #cbd5e1; padding: 10px; text-align: left; vertical-align: top; font-size: 13px; }
+          th { width: 32%; background: #f1f5f9; color: #173C61; }
+          .statement { margin-top: 18px; border: 1px solid #cbd5e1; background: #f8fafc; padding: 12px; font-size: 13px; line-height: 1.5; }
+          .signatures { display: grid; grid-template-columns: repeat(3, 1fr); gap: 18px; margin-top: 76px; }
+          .signature { text-align: center; font-size: 12px; min-height: 74px; }
+          .line { border-top: 1px solid #0f2742; padding-top: 8px; font-weight: 700; }
+          .role { margin-top: 4px; color: #475569; font-weight: 700; }
+          @media print { body { padding: 18px; } .signatures { break-inside: avoid; } }
+        </style>
+      </head>
+      <body>
+        <section class="header">
+          <div>
+            <div class="brand">SIT - Sistema Integrado de Trabajo</div>
+            <h1>${escapeHtml(title)}</h1>
+          </div>
+          <div class="code">
+            Fecha de impresion<br />
+            ${new Date().toLocaleDateString("es-EC")}
+          </div>
+        </section>
+
+        <table>${rows.map(([label, value]) => `<tr><th>${escapeHtml(label)}</th><td>${escapeHtml(value)}</td></tr>`).join("")}</table>
+
+        <div class="statement">
+          Por medio del presente documento se deja constancia de la entrega, recepcion y custodia del equipo descrito, con el estado indicado y bajo responsabilidad de las partes firmantes.
+        </div>
+
+        <section class="signatures">
+          ${signatures.map((signature) => `
+            <div class="signature">
+              <div class="line">${escapeHtml(signature.name || "-")}</div>
+              <div class="role">${escapeHtml(signature.label)}</div>
+            </div>
+          `).join("")}
+        </section>
+      </body>
+    </html>
+  `;
+  const win = window.open("", "_blank", "width=900,height=700");
+  if (!win) return;
+  win.document.write(html);
+  win.document.close();
+  win.focus();
+  win.print();
+}
+
+function escapeHtml(value: string) {
+  return String(value)
+    .replace(/&/g, "&amp;")
+    .replace(/</g, "&lt;")
+    .replace(/>/g, "&gt;")
+    .replace(/"/g, "&quot;");
+}
+
+function buildContractAreaOptions(contracts: ServiceContract[]): SelectOption[] {
+  return contracts.flatMap((contract, contractIndex) => {
+    const contractName = contract.contractNumber
+      ? `${contract.clientName} - ${contract.contractNumber}`
+      : `${contract.clientName} - ${contract.serviceType}`;
+
+    if (contract.workplaces?.length) {
+      return contract.workplaces.flatMap((workplace, workplaceIndex) => {
+        if (workplace.areas?.length) {
+          return workplace.areas.map((area, areaIndex) => ({
+            value: `${contract._id || contractIndex}:${workplace.id || workplaceIndex}:${area.id || areaIndex}`,
+            label: `${contractName} / ${workplace.name} / ${area.name}`,
+          }));
+        }
+        return [{
+          value: `${contract._id || contractIndex}:${workplace.id || workplaceIndex}:sin-area`,
+          label: `${contractName} / ${workplace.name}`,
+        }];
+      });
+    }
+
+    if (contract.area || contract.shift) {
+      return [{
+        value: `${contract._id || contractIndex}:general`,
+        label: [contractName, contract.area, contract.shift].filter(Boolean).join(" / "),
+      }];
+    }
+
+    return [{
+      value: `${contract._id || contractIndex}:general`,
+      label: contractName,
+    }];
+  })
+    .filter((option) => option.label.trim())
+    .filter((option, index, all) => all.findIndex((item) => item.label === option.label) === index)
+    .map((option, index) => ({
+      ...option,
+      value: option.value || String(index),
+    }));
 }

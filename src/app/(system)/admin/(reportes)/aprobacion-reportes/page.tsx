@@ -59,18 +59,27 @@ export default function ReportApprovalsPage() {
         <aside className="rounded-lg border border-slate-200 bg-white p-4 shadow-sm">
           <h2 className="mb-4 text-sm font-bold uppercase tracking-[0.12em] text-slate-500">Reportes enviados</h2>
           <div className="space-y-2">
-            {reports.map((report) => (
-              <button
-                key={report._id}
-                onClick={() => setSelectedId(report._id || "")}
-                className={`w-full rounded-md border px-4 py-3 text-left transition ${
-                  selected?._id === report._id ? "border-[#33C3C9] bg-[#E6F8F9]" : "border-slate-200 hover:bg-slate-50"
-                }`}
-              >
-                <span className="block font-semibold text-[#173C61]">{report.clientName}</span>
-                <span className="mt-1 block text-xs text-slate-500">{report.date} - {report.workplaceName || report.workerName} - {statusLabel(report.reportStatus)}</span>
-              </button>
-            ))}
+            {reports.map((report) => {
+              const signal = reportSignal(report.reportStatus);
+              return (
+                <button
+                  key={report._id}
+                  onClick={() => setSelectedId(report._id || "")}
+                  className={`w-full rounded-md border-l-4 px-4 py-3 text-left transition ${signal.card} ${
+                    selected?._id === report._id ? "ring-2 ring-[#173C61]/35" : "hover:shadow-sm"
+                  }`}
+                >
+                  <span className="flex items-start justify-between gap-3">
+                    <span className="block font-semibold text-[#173C61]">{report.clientName}</span>
+                    <span className={`inline-flex shrink-0 items-center gap-1 rounded-full border px-2 py-1 text-[11px] font-bold ${signal.badge}`}>
+                      <span className={`h-2 w-2 rounded-full ${signal.dot}`} />
+                      {statusLabel(report.reportStatus)}
+                    </span>
+                  </span>
+                  <span className="mt-1 block text-xs text-slate-500">{report.date} - {report.workplaceName || report.workerName}</span>
+                </button>
+              );
+            })}
             {reports.length === 0 && <p className="text-sm text-slate-500">No hay reportes enviados.</p>}
           </div>
         </aside>
@@ -89,18 +98,26 @@ export default function ReportApprovalsPage() {
                 <Info label="Horas extras" value={formatNumber(selected.overtimeHours)} />
                 <Info label="Trabajadores" value={String(selected.staffReports?.length || 1)} />
                 <Info label="Multas" value={`$ ${formatNumber(selected.fineAmount)}`} />
-                <Info label="Estado" value={statusLabel(selected.reportStatus)} />
+                <StatusInfo label="Estado" status={selected.reportStatus} />
               </div>
 
               <section className="mt-4 rounded-lg border border-slate-200 bg-slate-50 p-4">
                 <h2 className="mb-3 font-bold text-[#173C61]">Detalle del personal</h2>
                 <div className="space-y-3">
-                  {getStaffReports(selected).map((staff) => (
-                    <details key={staff.id} className="rounded-md border border-slate-200 bg-white p-4">
+                  {getStaffReports(selected).map((staff) => {
+                    const signal = staffComplianceSignal(staff);
+                    return (
+                    <details key={staff.id} className={`rounded-md border-l-4 bg-white p-4 ${signal.card}`}>
                       <summary className="cursor-pointer list-none">
                         <div className="flex flex-col justify-between gap-2 sm:flex-row sm:items-start">
                           <div>
-                            <h3 className="font-bold text-[#173C61]">{staff.workerName}</h3>
+                            <div className="flex flex-wrap items-center gap-2">
+                              <h3 className="font-bold text-[#173C61]">{staff.workerName}</h3>
+                              <span className={`inline-flex items-center gap-1 rounded-full border px-2 py-1 text-[11px] font-bold ${signal.badge}`}>
+                                <span className={`h-2 w-2 rounded-full ${signal.dot}`} />
+                                {signal.label}
+                              </span>
+                            </div>
                             <p className="text-sm text-slate-600">{staff.documentId || "Sin cedula"} | {staff.position || "Sin cargo"} | {attendanceLabel(staff.attendanceStatus)}</p>
                           </div>
                           <p className="text-sm font-bold text-[#173C61]">{formatNumber(staff.totalHours)} h</p>
@@ -117,7 +134,8 @@ export default function ReportApprovalsPage() {
                         <Info label="Novedad" value={staff.notes || "Sin novedad"} />
                       </div>
                     </details>
-                  ))}
+                    );
+                  })}
                 </div>
               </section>
 
@@ -153,6 +171,19 @@ function Info({ label, value }: { label: string; value: string }) {
   );
 }
 
+function StatusInfo({ label, status }: { label: string; status?: SupervisorReport["reportStatus"] }) {
+  const signal = reportSignal(status);
+  return (
+    <div className={`rounded-md border-l-4 p-3 ${signal.card}`}>
+      <p className="text-xs font-bold uppercase tracking-[0.1em] text-slate-500">{label}</p>
+      <p className={`mt-2 inline-flex items-center gap-2 rounded-full border px-3 py-1 text-sm font-bold ${signal.badge}`}>
+        <span className={`h-2.5 w-2.5 rounded-full ${signal.dot}`} />
+        {statusLabel(status)}
+      </p>
+    </div>
+  );
+}
+
 function formatNumber(value?: number) {
   return Number(value || 0).toFixed(2);
 }
@@ -182,4 +213,60 @@ function getStaffReports(report: SupervisorReport) {
 
 function attendanceLabel(status: SupervisorReport["attendanceStatus"]) {
   return { attended: "Asistio", absent: "Falto", permission: "Permiso", sick: "Enfermedad", late: "Retraso", replacement: "Reemplazo" }[status];
+}
+
+function reportSignal(status?: SupervisorReport["reportStatus"]) {
+  const signals = {
+    approved: {
+      card: "border-l-emerald-500 border-slate-200 bg-emerald-50/60",
+      badge: "border-emerald-200 bg-emerald-100 text-emerald-800",
+      dot: "bg-emerald-600",
+    },
+    submitted: {
+      card: "border-l-amber-500 border-slate-200 bg-amber-50/60",
+      badge: "border-amber-200 bg-amber-100 text-amber-800",
+      dot: "bg-amber-500",
+    },
+    observed: {
+      card: "border-l-orange-500 border-slate-200 bg-orange-50/60",
+      badge: "border-orange-200 bg-orange-100 text-orange-800",
+      dot: "bg-orange-500",
+    },
+    rejected: {
+      card: "border-l-red-600 border-slate-200 bg-red-50/60",
+      badge: "border-red-200 bg-red-100 text-red-800",
+      dot: "bg-red-600",
+    },
+    draft: {
+      card: "border-l-slate-400 border-slate-200 bg-white",
+      badge: "border-slate-200 bg-slate-100 text-slate-700",
+      dot: "bg-slate-400",
+    },
+  };
+  return signals[status || "draft"];
+}
+
+function staffComplianceSignal(staff: ReturnType<typeof getStaffReports>[number]) {
+  if (staff.attendanceStatus === "absent" || Number(staff.fineAmount || 0) > 0) {
+    return {
+      label: "Incumplimiento",
+      card: "border-l-red-600 border-slate-200",
+      badge: "border-red-200 bg-red-100 text-red-800",
+      dot: "bg-red-600",
+    };
+  }
+  if (staff.attendanceStatus === "late" || staff.attendanceStatus === "permission" || staff.attendanceStatus === "sick" || Number(staff.delayMinutes || 0) > 0) {
+    return {
+      label: "Con novedad",
+      card: "border-l-amber-500 border-slate-200",
+      badge: "border-amber-200 bg-amber-100 text-amber-800",
+      dot: "bg-amber-500",
+    };
+  }
+  return {
+    label: "Cumplido",
+    card: "border-l-emerald-500 border-slate-200",
+    badge: "border-emerald-200 bg-emerald-100 text-emerald-800",
+    dot: "bg-emerald-600",
+  };
 }

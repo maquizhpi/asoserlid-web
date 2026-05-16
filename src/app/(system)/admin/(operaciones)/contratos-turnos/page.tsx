@@ -4,6 +4,7 @@ import { FormEvent, useEffect, useMemo, useState } from "react";
 import Link from "next/link";
 import SearchableSelect, { type SelectOption } from "@/components/system/SearchableSelect";
 import SystemModulePage from "@/components/system/SystemModulePage";
+import { confirmSystem, notifySystem } from "@/components/system/SystemNotifier";
 import type {
   AssignedContractStaff,
   Client,
@@ -32,6 +33,10 @@ const days = [
 const emptyContract: ServiceContract = {
   clientId: "",
   clientName: "",
+  contractNumber: "",
+  contractAdministrator: "",
+  contractAdministratorEmail: "",
+  contractAdministratorPhone: "",
   serviceType: "",
   area: "",
   shift: "",
@@ -45,7 +50,12 @@ const emptyContract: ServiceContract = {
   workplaces: [],
 };
 
+function createEmptyContract(): ServiceContract {
+  return { ...emptyContract, startDate: new Date().toISOString().slice(0, 10), workplaces: [], assignedStaffIds: [] };
+}
+
 type ModalState =
+  | { type: "contract"; contract: ServiceContract }
   | { type: "workplace"; workplace?: ContractWorkplace }
   | { type: "area"; workplaceId: string; area?: ContractArea }
   | { type: "shift"; workplaceId: string; areaId: string; shift?: ContractShift }
@@ -63,7 +73,8 @@ export default function ContractsShiftsPage() {
   const [products, setProducts] = useState<SupplyProduct[]>([]);
   const [workers, setWorkers] = useState<Worker[]>([]);
   const [selectedId, setSelectedId] = useState<string | null>(null);
-  const [form, setForm] = useState<ServiceContract>(emptyContract);
+  const [form, setForm] = useState<ServiceContract>(createEmptyContract);
+  const [isCreatingNew, setIsCreatingNew] = useState(false);
   const [query, setQuery] = useState("");
   const [modal, setModal] = useState<ModalState>(null);
   const [status, setStatus] = useState<string | null>(null);
@@ -81,15 +92,17 @@ export default function ContractsShiftsPage() {
 
   useEffect(() => {
     loadData();
+    // La carga inicial debe ejecutarse una sola vez; los guardados recargan datos explicitamente.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   useEffect(() => {
-    setForm(selectedContract ? normalizeContract(selectedContract) : emptyContract);
-  }, [selectedContract]);
+    if (!isCreatingNew) setForm(selectedContract ? normalizeContract(selectedContract) : createEmptyContract());
+  }, [isCreatingNew, selectedContract]);
 
   useEffect(() => {
-    if (!selectedContract && contracts[0]?._id) setSelectedId(contracts[0]._id);
-  }, [contracts, selectedContract]);
+    if (!isCreatingNew && !selectedContract && contracts[0]?._id) setSelectedId(contracts[0]._id);
+  }, [contracts, isCreatingNew, selectedContract]);
 
   async function loadData() {
     const [contractsRes, clientsRes, serviceTypesRes, groupsRes, workersRes, supervisorsRes, kitsRes, productsRes] = await Promise.all([
@@ -126,18 +139,38 @@ export default function ContractsShiftsPage() {
     if (kitsRes.ok) setKits(kitsData.items || []);
     if (productsRes.ok) setProducts(productsData.items || []);
     if (!contractsRes.ok || !clientsRes.ok || !serviceTypesRes.ok || !groupsRes.ok || !workersRes.ok || !supervisorsRes.ok || !kitsRes.ok || !productsRes.ok) {
-      setStatus(contractsData.error || clientsData.error || serviceTypesData.error || groupsData.error || workersData.error || supervisorsData.error || kitsData.error || productsData.error || "No se pudo cargar contratos.");
+      showStatus(contractsData.error || clientsData.error || serviceTypesData.error || groupsData.error || workersData.error || supervisorsData.error || kitsData.error || productsData.error || "No se pudo cargar contratos.", "error");
     }
   }
 
-  function startNewContract() {
-    setSelectedId(null);
-    setForm({ ...emptyContract, startDate: new Date().toISOString().slice(0, 10) });
+  async function startNewContract() {
+    if (!(await confirmLeaveChanges())) return;
+    setModal({ type: "contract", contract: createEmptyContract() });
+  }
+
+  async function selectContract(contractId: string) {
+    if (!(await confirmLeaveChanges())) return;
+    setIsCreatingNew(false);
+    setSelectedId(contractId);
+  }
+
+  function showStatus(message: string, tone: "info" | "success" | "warning" | "error" = "info") {
+    setStatus(message);
+    notifySystem(message, { tone });
+  }
+
+  async function confirmLeaveChanges() {
+    if (!hasUnsavedChanges(form, selectedContract, isCreatingNew)) return true;
+    return confirmSystem("Tienes cambios sin guardar. Si sales o cambias de contrato, esos cambios se perderan.", {
+      tone: "warning",
+      confirmLabel: "Salir sin guardar",
+      cancelLabel: "Seguir editando",
+    });
   }
 
   async function saveContract(e?: FormEvent, nextForm = form) {
     e?.preventDefault();
-    setStatus("Guardando contrato...");
+    showStatus("Guardando contrato...", "info");
 
     const payload = buildContractPayload(nextForm);
     const isNew = !payload._id;
@@ -149,46 +182,51 @@ export default function ContractsShiftsPage() {
     const data = await res.json().catch(() => ({}));
 
     if (!res.ok) {
-      setStatus(data.error || "No se pudo guardar el contrato.");
+      showStatus(data.error || "No se pudo guardar el contrato.", "error");
       return false;
     }
 
-    setStatus("Contrato guardado correctamente.");
+    showStatus("Contrato guardado correctamente.", "success");
     await loadData();
+    setIsCreatingNew(false);
     setSelectedId(data.item?._id || payload._id || null);
+    setForm(normalizeContract(data.item || payload));
+    setModal(null);
     return true;
   }
 
   async function deleteContract() {
     if (!form._id) return;
     if (hasContractStructure(form)) {
-      setStatus("No se puede eliminar un contrato con lugares, areas, turnos o personal asignado. Elimina primero su estructura.");
+      showStatus("No se puede eliminar un contrato con lugares, areas, turnos o personal asignado. Elimina primero su estructura.", "warning");
       return;
     }
-    if (!window.confirm("Eliminar este contrato?")) return;
+    const confirmed = await confirmSystem("Vas a eliminar este contrato. Esta accion no se puede deshacer.", { tone: "warning", confirmLabel: "Eliminar" });
+    if (!confirmed) return;
 
     const res = await fetch(`/api/admin/contracts/${form._id}`, { method: "DELETE" });
     const data = await res.json().catch(() => ({}));
     if (!res.ok) {
-      setStatus(data.error || "No se pudo eliminar el contrato.");
+      showStatus(data.error || "No se pudo eliminar el contrato.", "error");
       return;
     }
 
-    setStatus("Contrato eliminado.");
+    showStatus("Contrato eliminado.", "success");
     setSelectedId(null);
+    setIsCreatingNew(false);
     await loadData();
   }
 
   async function saveNested(nextForm: ServiceContract, successMessage: string) {
     setForm(nextForm);
     if (!nextForm.clientName || !nextForm.serviceType || !nextForm.startDate) {
-      setStatus("Primero completa y guarda la informacion general del contrato.");
+      showStatus("Primero completa y guarda la informacion general del contrato.", "warning");
       return;
     }
+    setModal(null);
     const ok = await saveContract(undefined, nextForm);
     if (ok) {
-      setStatus(successMessage);
-      setModal(null);
+      showStatus(successMessage, "success");
     }
   }
 
@@ -204,9 +242,12 @@ export default function ContractsShiftsPage() {
     saveNested(nextForm, "Lugar de trabajo guardado.");
   }
 
-  function deleteWorkplace(workplaceId: string) {
+  async function deleteWorkplace(workplaceId: string) {
     const workplace = form.workplaces?.find((item) => item.id === workplaceId);
-    if (workplace && workplace.areas.length > 0 && !window.confirm("Este lugar tiene areas, turnos o personal. Quieres eliminar toda su estructura?")) return;
+    if (workplace && workplace.areas.length > 0) {
+      const confirmed = await confirmSystem("Este lugar tiene areas, turnos o personal. Si continuas se elimina toda su estructura.", { tone: "warning", confirmLabel: "Eliminar lugar" });
+      if (!confirmed) return;
+    }
     saveNested({ ...form, workplaces: (form.workplaces || []).filter((item) => item.id !== workplaceId) }, "Lugar de trabajo eliminado.");
   }
 
@@ -224,7 +265,7 @@ export default function ContractsShiftsPage() {
   function deleteArea(workplaceId: string, areaId: string) {
     const area = form.workplaces?.find((workplace) => workplace.id === workplaceId)?.areas.find((item) => item.id === areaId);
     if (area?.shifts.some((shift) => shift.status === "active")) {
-      setStatus("No se puede eliminar un area con horarios activos.");
+      showStatus("No se puede eliminar un area con horarios activos.", "warning");
       return;
     }
     const nextForm = mapWorkplaces(form, workplaceId, (workplace) => ({ ...workplace, areas: workplace.areas.filter((item) => item.id !== areaId) }));
@@ -245,40 +286,65 @@ export default function ContractsShiftsPage() {
   function deleteShift(workplaceId: string, areaId: string, shiftId: string) {
     const shift = findShift(form, workplaceId, areaId, shiftId);
     if (shift?.assignedStaff.some((staff) => staff.assignmentStatus === "active")) {
-      setStatus("No se puede eliminar un horario con personal asignado activo.");
+      showStatus("No se puede eliminar un horario con personal asignado activo.", "warning");
       return;
     }
     const nextForm = mapAreas(form, workplaceId, areaId, (area) => ({ ...area, shifts: area.shifts.filter((item) => item.id !== shiftId) }));
     saveNested(nextForm, "Horario eliminado.");
   }
 
-  function assignWorker(workplaceId: string, areaId: string, shiftId: string, worker: Worker) {
+  function assignWorkers(workplaceId: string, areaId: string, shiftId: string, selectedWorkers: Worker[]) {
     const shift = findShift(form, workplaceId, areaId, shiftId);
-    if (!shift || !worker._id) return;
-    if (shift.assignedStaff.some((staff) => staff.workerId === worker._id && staff.assignmentStatus === "active")) {
-      setStatus("No se puede asignar la misma persona dos veces al mismo horario.");
-      return;
+    if (!shift || !selectedWorkers.length) return;
+
+    const currentStaff = [...shift.assignedStaff];
+    const rejected: string[] = [];
+    const added: AssignedContractStaff[] = [];
+
+    for (const worker of selectedWorkers) {
+      if (!worker._id) continue;
+      const workerName = `${worker.firstName} ${worker.lastName}`.trim();
+      if (currentStaff.some((staff) => staff.workerId === worker._id && staff.assignmentStatus === "active")) {
+        rejected.push(`${workerName}: ya esta asignado a este horario`);
+        continue;
+      }
+      const conflict = findWorkerScheduleConflict(
+        { ...form, workplaces: replaceShiftStaff(form, workplaceId, areaId, shiftId, currentStaff).workplaces },
+        contracts,
+        worker._id,
+        shift
+      );
+      if (conflict) {
+        rejected.push(`${workerName}: cruza con ${conflict.shiftName} en ${conflict.contractName}`);
+        continue;
+      }
+
+      const staff: AssignedContractStaff = {
+        id: createId(),
+        shiftId,
+        workerId: worker._id,
+        firstName: worker.firstName,
+        lastName: worker.lastName,
+        documentId: worker.documentId,
+        position: worker.position,
+        phone: worker.phone,
+        assignmentStatus: "active",
+        assignmentDate: new Date().toISOString().slice(0, 10),
+      };
+      currentStaff.push(staff);
+      added.push(staff);
     }
-    const conflict = findWorkerScheduleConflict(form, contracts, worker._id, shift);
-    if (conflict) {
-      setStatus(`Este trabajador ya tiene un turno cruzado: ${conflict.shiftName} en ${conflict.contractName}.`);
+
+    if (!added.length) {
+      showStatus(`No se asigno personal.\n${rejected.join("\n")}`, "warning");
       return;
     }
 
-    const staff: AssignedContractStaff = {
-      id: createId(),
-      shiftId,
-      workerId: worker._id,
-      firstName: worker.firstName,
-      lastName: worker.lastName,
-      documentId: worker.documentId,
-      position: worker.position,
-      phone: worker.phone,
-      assignmentStatus: "active",
-      assignmentDate: new Date().toISOString().slice(0, 10),
-    };
-    const nextForm = mapShifts(form, workplaceId, areaId, shiftId, (item) => ({ ...item, assignedStaff: [...item.assignedStaff, staff] }));
-    saveNested(nextForm, "Personal asignado.");
+    const nextForm = mapShifts(form, workplaceId, areaId, shiftId, (item) => ({ ...item, assignedStaff: currentStaff }));
+    const message = rejected.length
+      ? `${added.length} trabajador(es) asignado(s).\nNo asignados:\n${rejected.join("\n")}`
+      : `${added.length} trabajador(es) asignado(s).`;
+    saveNested(nextForm, message);
   }
 
   function removeStaff(workplaceId: string, areaId: string, shiftId: string, staffId: string) {
@@ -288,7 +354,7 @@ export default function ContractsShiftsPage() {
 
   async function saveKit(kit: SupplyKit) {
     if (!kit._id) return;
-    setStatus("Actualizando kit de insumos...");
+    showStatus("Actualizando kit de insumos...", "info");
     const totalItems = (kit.items || []).reduce((sum, item) => sum + Number(item.quantity || 0), 0);
     const payload = {
       ...kit,
@@ -304,10 +370,10 @@ export default function ContractsShiftsPage() {
     });
     const data = await res.json().catch(() => ({}));
     if (!res.ok) {
-      setStatus(data.error || "No se pudo actualizar el kit.");
+      showStatus(data.error || "No se pudo actualizar el kit.", "error");
       return;
     }
-    setStatus("Kit de insumos actualizado correctamente.");
+    showStatus("Kit de insumos actualizado correctamente.", "success");
     setModal(null);
     await loadData();
   }
@@ -327,7 +393,7 @@ export default function ContractsShiftsPage() {
             {filteredContracts.map((contract) => (
               <button
                 key={contract._id}
-                onClick={() => setSelectedId(contract._id || null)}
+                onClick={() => contract._id && selectContract(contract._id)}
                 className={`w-full rounded-md border px-4 py-3 text-left transition ${selectedId === contract._id ? "border-[#33C3C9] bg-[#E6F8F9]" : "border-slate-200 hover:bg-slate-50"}`}
               >
                 <span className="block font-semibold text-[#173C61]">{contract.clientName}</span>
@@ -339,13 +405,9 @@ export default function ContractsShiftsPage() {
         </aside>
 
         <div className="space-y-6">
-          <ContractGeneralForm
-            form={form}
-            clients={clients}
-            serviceTypes={serviceTypes}
-            groups={groups}
-            onChange={setForm}
-            onSubmit={saveContract}
+          <ContractGeneralView
+            contract={form}
+            onEdit={() => setModal({ type: "contract", contract: form })}
             onDelete={deleteContract}
           />
 
@@ -384,6 +446,16 @@ export default function ContractsShiftsPage() {
           onSave={upsertWorkplace}
         />
       )}
+      {modal?.type === "contract" && (
+        <ContractModal
+          contract={modal.contract}
+          clients={clients}
+          serviceTypes={serviceTypes}
+          groups={groups}
+          onClose={() => setModal(null)}
+          onSave={(contract) => saveContract(undefined, contract)}
+        />
+      )}
       {modal?.type === "area" && (
         <AreaModal
           area={modal.area}
@@ -401,8 +473,11 @@ export default function ContractsShiftsPage() {
       {modal?.type === "staff" && (
         <StaffModal
           workers={workers}
+          currentContract={form}
+          contracts={contracts}
+          targetShift={findShift(form, modal.workplaceId, modal.areaId, modal.shiftId)}
           onClose={() => setModal(null)}
-          onAssign={(worker) => assignWorker(modal.workplaceId, modal.areaId, modal.shiftId, worker)}
+          onAssign={(selectedWorkers) => assignWorkers(modal.workplaceId, modal.areaId, modal.shiftId, selectedWorkers)}
         />
       )}
       {modal?.type === "kit" && (
@@ -417,45 +492,75 @@ export default function ContractsShiftsPage() {
   );
 }
 
-function ContractGeneralForm({
-  form,
-  clients,
-  serviceTypes,
-  groups,
-  onChange,
-  onSubmit,
+function ContractGeneralView({
+  contract,
+  onEdit,
   onDelete,
 }: {
-  form: ServiceContract;
-  clients: SelectOption[];
-  serviceTypes: SelectOption[];
-  groups: SelectOption[];
-  onChange: (contract: ServiceContract) => void;
-  onSubmit: (e: FormEvent) => void;
+  contract: ServiceContract;
+  onEdit: () => void;
   onDelete: () => void;
 }) {
   return (
-    <form onSubmit={onSubmit} className="rounded-lg border border-slate-200 bg-white p-5 shadow-sm">
+    <section className="rounded-lg border border-slate-200 bg-white p-5 shadow-sm">
       <div className="mb-4 flex flex-col justify-between gap-3 sm:flex-row sm:items-center">
         <h2 className="text-lg font-bold text-[#173C61]">Informacion general del contrato</h2>
-        {form._id && <button type="button" onClick={onDelete} className="rounded-md border border-red-200 px-4 py-2 text-sm font-semibold text-red-700 hover:bg-red-50">Eliminar contrato</button>}
+        <div className="flex flex-wrap gap-2">
+          <button type="button" onClick={onEdit} className="rounded-md bg-[#173C61] px-4 py-2 text-sm font-semibold text-white hover:bg-[#218F93]">{contract._id ? "Editar contrato" : "Nuevo contrato"}</button>
+          {contract._id && <button type="button" onClick={onDelete} className="rounded-md border border-red-200 px-4 py-2 text-sm font-semibold text-red-700 hover:bg-red-50">Eliminar contrato</button>}
+        </div>
       </div>
-      <div className="grid gap-4 sm:grid-cols-2">
-        <SearchableSelect label="Cliente" value={form.clientId || ""} options={clients} placeholder="Buscar cliente..." onChange={(option) => onChange({ ...form, clientId: option?.value || "", clientName: option?.label || "" })} />
-        <SearchableSelect label="Tipo de servicio" value={form.serviceType || ""} options={serviceTypes} placeholder="Buscar servicio..." onChange={(option) => onChange({ ...form, serviceType: option?.label || "" })} />
-        <Field label="Fecha inicio"><input required type="date" className={inputClass} value={form.startDate} onChange={(e) => onChange({ ...form, startDate: e.target.value })} /></Field>
-        <Field label="Fecha fin"><input type="date" className={inputClass} value={form.endDate || ""} onChange={(e) => onChange({ ...form, endDate: e.target.value })} /></Field>
-        <SearchableSelect label="Grupo de trabajo" value={form.workGroupId || ""} options={groups} placeholder="Buscar grupo..." onChange={(option) => onChange({ ...form, workGroupId: option?.value || "", workGroupName: option?.label || "" })} />
-        <Field label="Estado">
-          <select className={inputClass} value={form.status} onChange={(e) => onChange({ ...form, status: e.target.value as ServiceContract["status"] })}>
-            <option value="active">Activo</option>
-            <option value="paused">Pausado</option>
-            <option value="finished">Finalizado</option>
-          </select>
-        </Field>
+      <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
+        <InfoBox label="Numero de contrato" value={contract.contractNumber || "-"} />
+        <InfoBox label="Cliente" value={contract.clientName || "-"} />
+        <InfoBox label="Tipo de servicio" value={contract.serviceType || "-"} />
+        <InfoBox label="Fecha inicio" value={formatDate(contract.startDate)} />
+        <InfoBox label="Fecha fin" value={formatDate(contract.endDate)} />
+        <InfoBox label="Grupo de trabajo" value={contract.workGroupName || "-"} />
+        <InfoBox label="Administrador de contrato" value={contract.contractAdministrator || "-"} />
+        <InfoBox label="Correo administrador" value={contract.contractAdministratorEmail || "-"} />
+        <InfoBox label="Telefono administrador" value={contract.contractAdministratorPhone || "-"} />
+        <InfoBox label="Estado" value={contract.status === "active" ? "Activo" : contract.status === "paused" ? "Pausado" : "Finalizado"} />
       </div>
-      <button className="mt-5 rounded-md bg-[#173C61] px-5 py-3 font-semibold text-white hover:bg-[#218F93]">Guardar contrato</button>
-    </form>
+    </section>
+  );
+}
+
+function ContractModal({
+  contract,
+  clients,
+  serviceTypes,
+  groups,
+  onSave,
+  onClose,
+}: {
+  contract: ServiceContract;
+  clients: SelectOption[];
+  serviceTypes: SelectOption[];
+  groups: SelectOption[];
+  onSave: (contract: ServiceContract) => void;
+  onClose: () => void;
+}) {
+  const [form, setForm] = useState<ServiceContract>(normalizeContract(contract));
+  return (
+    <Modal title={form._id ? "Editar contrato" : "Nuevo contrato"} onClose={onClose} onSubmit={() => onSave(form)}>
+      <Field label="Numero de contrato"><input className={inputClass} value={form.contractNumber || ""} onChange={(e) => setForm({ ...form, contractNumber: e.target.value })} /></Field>
+      <SearchableSelect label="Cliente" value={form.clientId || ""} options={clients} placeholder="Buscar cliente..." onChange={(option) => setForm({ ...form, clientId: option?.value || "", clientName: option?.label || "" })} />
+      <SearchableSelect label="Tipo de servicio" value={form.serviceType || ""} options={serviceTypes} placeholder="Buscar servicio..." onChange={(option) => setForm({ ...form, serviceType: option?.label || "" })} />
+      <SearchableSelect label="Grupo de trabajo" value={form.workGroupId || ""} options={groups} placeholder="Buscar grupo..." onChange={(option) => setForm({ ...form, workGroupId: option?.value || "", workGroupName: option?.label || "" })} />
+      <Field label="Administrador de contrato"><input className={inputClass} value={form.contractAdministrator || ""} onChange={(e) => setForm({ ...form, contractAdministrator: e.target.value })} /></Field>
+      <Field label="Correo del administrador"><input type="email" className={inputClass} value={form.contractAdministratorEmail || ""} onChange={(e) => setForm({ ...form, contractAdministratorEmail: e.target.value })} /></Field>
+      <Field label="Telefono del administrador"><input className={inputClass} value={form.contractAdministratorPhone || ""} onChange={(e) => setForm({ ...form, contractAdministratorPhone: e.target.value })} /></Field>
+      <Field label="Fecha inicio"><input required type="date" className={inputClass} value={form.startDate} onChange={(e) => setForm({ ...form, startDate: e.target.value })} /></Field>
+      <Field label="Fecha fin"><input type="date" className={inputClass} value={form.endDate || ""} onChange={(e) => setForm({ ...form, endDate: e.target.value })} /></Field>
+      <Field label="Estado">
+        <select className={inputClass} value={form.status} onChange={(e) => setForm({ ...form, status: e.target.value as ServiceContract["status"] })}>
+          <option value="active">Activo</option>
+          <option value="paused">Pausado</option>
+          <option value="finished">Finalizado</option>
+        </select>
+      </Field>
+    </Modal>
   );
 }
 
@@ -569,7 +674,10 @@ function HierarchySection({
                           <div className="flex flex-col justify-between gap-3 sm:flex-row sm:items-start">
                             <div>
                               <h5 className="font-bold text-[#173C61]">{shift.shiftName}</h5>
-                              <p className="text-sm text-slate-600">{shift.startTime} a {shift.endTime} | {formatDays(shift.workDays)}</p>
+                              <p className="text-sm text-slate-600">
+                                {shift.startTime} a {shift.endTime} | {formatDays(shift.workDays)}
+                                {Number(shift.lunchBreakMinutes || 0) > 0 ? ` | Almuerzo ${shift.lunchBreakMinutes} min` : ""}
+                              </p>
                               <p className="mt-1 text-xs font-semibold uppercase tracking-[0.08em] text-slate-500">
                                 {shift.assignedStaff.length} trabajadores asignados
                               </p>
@@ -629,15 +737,20 @@ function AreaModal({ area, onSave, onClose }: { area?: ContractArea; onSave: (ar
 }
 
 function ShiftModal({ shift, onSave, onClose }: { shift?: ContractShift; onSave: (shift: ContractShift) => void; onClose: () => void }) {
-  const [form, setForm] = useState<ContractShift>(shift || { id: "", shiftName: "", startTime: "", endTime: "", workDays: [], observation: "", status: "active", assignedStaff: [] });
+  const [form, setForm] = useState<ContractShift>(shift || { id: "", shiftName: "", startTime: "", endTime: "", lunchBreakMinutes: 0, workDays: [], observation: "", status: "active", assignedStaff: [] });
   function toggleDay(day: string) {
     setForm((current) => ({ ...current, workDays: current.workDays.includes(day) ? current.workDays.filter((item) => item !== day) : [...current.workDays, day] }));
+  }
+  function updateLunchBreakMinutes(value: string) {
+    const lunchBreakMinutes = Math.max(0, Number(value || 0));
+    setForm({ ...form, lunchBreakMinutes });
   }
   return (
     <Modal title={shift ? "Editar horario / turno" : "Nuevo horario / turno"} onClose={onClose} onSubmit={() => onSave(form)}>
       <Field label="Nombre del turno"><input required className={inputClass} value={form.shiftName} onChange={(e) => setForm({ ...form, shiftName: e.target.value })} /></Field>
       <Field label="Hora de inicio"><input required type="time" className={inputClass} value={form.startTime} onChange={(e) => setForm({ ...form, startTime: e.target.value })} /></Field>
       <Field label="Hora de fin"><input required type="time" className={inputClass} value={form.endTime} onChange={(e) => setForm({ ...form, endTime: e.target.value })} /></Field>
+      <Field label="Almuerzo no trabajado (minutos)"><input type="number" min="0" step="15" className={inputClass} value={form.lunchBreakMinutes || 0} onChange={(e) => updateLunchBreakMinutes(e.target.value)} /></Field>
       <Field label="Estado"><select className={inputClass} value={form.status} onChange={(e) => setForm({ ...form, status: e.target.value as ContractShift["status"] })}><option value="active">Activo</option><option value="inactive">Inactivo</option></select></Field>
       <div className="sm:col-span-2">
         <p className="mb-2 text-sm font-semibold text-slate-700">Dias de trabajo</p>
@@ -650,9 +763,30 @@ function ShiftModal({ shift, onSave, onClose }: { shift?: ContractShift; onSave:
   );
 }
 
-function StaffModal({ workers, onAssign, onClose }: { workers: Worker[]; onAssign: (worker: Worker) => void; onClose: () => void }) {
+function StaffModal({
+  workers,
+  currentContract,
+  contracts,
+  targetShift,
+  onAssign,
+  onClose,
+}: {
+  workers: Worker[];
+  currentContract: ServiceContract;
+  contracts: ServiceContract[];
+  targetShift?: ContractShift;
+  onAssign: (workers: Worker[]) => void;
+  onClose: () => void;
+}) {
   const [term, setTerm] = useState("");
+  const [selectedWorkerIds, setSelectedWorkerIds] = useState<string[]>([]);
   const visibleWorkers = workers.filter((worker) => `${worker.firstName} ${worker.lastName} ${worker.documentId} ${worker.position}`.toLowerCase().includes(term.toLowerCase()));
+  const selectedWorkers = workers.filter((worker) => worker._id && selectedWorkerIds.includes(worker._id));
+  function toggleWorker(workerId: string) {
+    const worker = workers.find((item) => item._id === workerId);
+    if (!worker || getWorkerAvailability(worker, currentContract, contracts, targetShift).blocked) return;
+    setSelectedWorkerIds((current) => current.includes(workerId) ? current.filter((id) => id !== workerId) : [...current, workerId]);
+  }
   return (
     <div className="fixed inset-0 z-50 grid place-items-center bg-slate-950/50 px-4">
       <section className="w-full max-w-2xl rounded-lg border border-slate-200 bg-white p-5 shadow-xl">
@@ -660,14 +794,52 @@ function StaffModal({ workers, onAssign, onClose }: { workers: Worker[]; onAssig
           <h2 className="text-xl font-bold text-[#173C61]">Asignar personal</h2>
           <button onClick={onClose} className="rounded-md border border-slate-200 px-3 py-1 text-sm font-bold text-slate-600 hover:bg-slate-50">Cerrar</button>
         </div>
+        <p className="mb-3 rounded-md border border-slate-200 bg-slate-50 px-3 py-2 text-xs font-medium text-slate-600">
+          Puedes asignar un trabajador de otro grupo o contrato siempre que sus horarios no se crucen.
+        </p>
         <input className={inputClass} placeholder="Buscar por nombre, cedula o cargo..." value={term} onChange={(e) => setTerm(e.target.value)} />
         <div className="mt-4 max-h-96 space-y-2 overflow-auto">
-          {visibleWorkers.map((worker) => (
-            <button key={worker._id} onClick={() => onAssign(worker)} className="w-full rounded-md border border-slate-200 px-4 py-3 text-left hover:bg-[#E6F8F9]">
-              <span className="block font-semibold text-[#173C61]">{worker.firstName} {worker.lastName}</span>
-              <span className="text-sm text-slate-600">{worker.documentId} | {worker.position} | {worker.phone}</span>
-            </button>
-          ))}
+          {visibleWorkers.map((worker) => {
+            const availability = getWorkerAvailability(worker, currentContract, contracts, targetShift);
+            const isSelected = Boolean(worker._id && selectedWorkerIds.includes(worker._id));
+            return (
+              <button
+                key={worker._id}
+                type="button"
+                disabled={availability.blocked}
+                onClick={() => worker._id && toggleWorker(worker._id)}
+                className={`flex w-full items-center gap-3 rounded-md border px-4 py-3 text-left transition ${
+                  availability.blocked
+                    ? "cursor-not-allowed border-slate-200 bg-slate-100 text-slate-400 opacity-75"
+                    : isSelected
+                      ? "border-[#33C3C9] bg-[#E6F8F9] hover:bg-[#E6F8F9]"
+                      : "border-slate-200 hover:bg-[#E6F8F9]"
+                }`}
+              >
+                <span className={`grid h-5 w-5 shrink-0 place-items-center rounded border bg-white text-xs font-bold ${availability.blocked ? "border-slate-200 text-slate-400" : "border-slate-300 text-[#173C61]"}`}>
+                  {isSelected ? "OK" : ""}
+                </span>
+                <span>
+                  <span className={`block font-semibold ${availability.blocked ? "text-slate-500" : "text-[#173C61]"}`}>{worker.firstName} {worker.lastName}</span>
+                  <span className="text-sm text-slate-600">{worker.documentId} | {worker.position} | {worker.phone}</span>
+                  {availability.reason && <span className="mt-1 block text-xs font-semibold text-red-600">{availability.reason}</span>}
+                </span>
+              </button>
+            );
+          })}
+        </div>
+        <div className="mt-5 flex flex-col justify-between gap-3 sm:flex-row sm:items-center">
+          <p className="text-sm text-slate-600">
+            {selectedWorkers.length ? `${selectedWorkers.length} trabajador(es) seleccionado(s).` : "Selecciona uno o varios trabajadores y luego confirma con Agregar."}
+          </p>
+          <button
+            type="button"
+            disabled={!selectedWorkers.length}
+            onClick={() => onAssign(selectedWorkers)}
+            className="rounded-md bg-[#173C61] px-5 py-3 text-sm font-bold text-white hover:bg-[#218F93] disabled:cursor-not-allowed disabled:opacity-50"
+          >
+            Agregar seleccionados
+          </button>
         </div>
       </section>
     </div>
@@ -830,6 +1002,13 @@ function InfoBox({ label, value }: { label: string; value: string }) {
   );
 }
 
+function formatDate(value?: string) {
+  if (!value) return "-";
+  const [year, month, day] = value.slice(0, 10).split("-");
+  if (!year || !month || !day) return value;
+  return `${day}/${month}/${year}`;
+}
+
 function Modal({ title, children, onClose, onSubmit }: { title: string; children: React.ReactNode; onClose: () => void; onSubmit: () => void }) {
   return (
     <div className="fixed inset-0 z-50 grid place-items-center bg-slate-950/50 px-4">
@@ -921,6 +1100,7 @@ function normalizeContract(contract: ServiceContract): ServiceContract {
               shiftName: contract.shift,
               startTime: "00:00",
               endTime: "23:59",
+              lunchBreakMinutes: 0,
               workDays: [],
               status: "active" as const,
               assignedStaff: [],
@@ -946,6 +1126,15 @@ function buildContractPayload(contract: ServiceContract): ServiceContract {
   };
 }
 
+function hasUnsavedChanges(form: ServiceContract, selectedContract: ServiceContract | undefined, isCreatingNew: boolean) {
+  const base = isCreatingNew ? createEmptyContract() : selectedContract ? normalizeContract(selectedContract) : createEmptyContract();
+  return stableContractJson(form) !== stableContractJson(base);
+}
+
+function stableContractJson(contract: ServiceContract) {
+  return JSON.stringify(buildContractPayload(contract));
+}
+
 function mapWorkplaces(contract: ServiceContract, workplaceId: string, mapper: (workplace: ContractWorkplace) => ContractWorkplace): ServiceContract {
   return { ...contract, workplaces: (contract.workplaces || []).map((workplace) => workplace.id === workplaceId ? mapper(workplace) : workplace) };
 }
@@ -956,6 +1145,21 @@ function mapAreas(contract: ServiceContract, workplaceId: string, areaId: string
 
 function mapShifts(contract: ServiceContract, workplaceId: string, areaId: string, shiftId: string, mapper: (shift: ContractShift) => ContractShift): ServiceContract {
   return mapAreas(contract, workplaceId, areaId, (area) => ({ ...area, shifts: area.shifts.map((shift) => shift.id === shiftId ? mapper(shift) : shift) }));
+}
+
+function replaceShiftStaff(contract: ServiceContract, workplaceId: string, areaId: string, shiftId: string, staff: AssignedContractStaff[]) {
+  return mapShifts(contract, workplaceId, areaId, shiftId, (shift) => ({ ...shift, assignedStaff: staff }));
+}
+
+function getWorkerAvailability(worker: Worker, currentContract: ServiceContract, contracts: ServiceContract[], targetShift?: ContractShift) {
+  if (!worker._id) return { blocked: true, reason: "No disponible: trabajador sin identificador." };
+  if (worker.status !== "active") return { blocked: true, reason: "No disponible: estado inactivo." };
+  if (!targetShift) return { blocked: true, reason: "Selecciona un horario valido." };
+  const alreadyAssigned = targetShift.assignedStaff.some((staff) => staff.workerId === worker._id && staff.assignmentStatus === "active");
+  if (alreadyAssigned) return { blocked: true, reason: "No disponible: ya esta asignado a este horario." };
+  const conflict = findWorkerScheduleConflict(currentContract, contracts, worker._id, targetShift);
+  if (conflict) return { blocked: true, reason: `No disponible: horario cruzado con ${conflict.shiftName} en ${conflict.contractName}.` };
+  return { blocked: false, reason: "" };
 }
 
 function findShift(contract: ServiceContract, workplaceId: string, areaId: string, shiftId: string) {

@@ -4,7 +4,7 @@ import { FormEvent, ReactNode, useEffect, useMemo, useRef, useState } from "reac
 import Image from "next/image";
 import Link from "next/link";
 import SystemModulePage from "@/components/system/SystemModulePage";
-import type { Post } from "@/types/blog";
+import type { BlogComment, Post } from "@/types/blog";
 
 const emptyPost: Post = {
   slug: "",
@@ -25,6 +25,7 @@ export default function BlogAdminPage() {
   const [loading, setLoading] = useState(true);
   const [uploading, setUploading] = useState(false);
   const [posts, setPosts] = useState<Post[]>([]);
+  const [comments, setComments] = useState<BlogComment[]>([]);
   const [selectedSlug, setSelectedSlug] = useState("new");
   const [form, setForm] = useState<Post>(emptyPost);
   const [tagText, setTagText] = useState("");
@@ -38,6 +39,7 @@ export default function BlogAdminPage() {
 
   useEffect(() => {
     loadPosts();
+    loadComments();
   }, []);
 
   useEffect(() => {
@@ -63,6 +65,28 @@ export default function BlogAdminPage() {
       setStatus(data.error || "No se pudieron cargar las publicaciones.");
     }
     setLoading(false);
+  }
+
+  async function loadComments() {
+    const res = await fetch("/api/admin/blog-comments", { cache: "no-store" });
+    const data = await res.json().catch(() => ({}));
+    if (res.ok) setComments(data.comments || []);
+  }
+
+  async function reviewComment(commentId: string, reviewStatus: "approved" | "rejected") {
+    setStatus(reviewStatus === "approved" ? "Aprobando comentario..." : "Rechazando comentario...");
+    const res = await fetch(`/api/admin/blog-comments/${commentId}`, {
+      method: "PUT",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ status: reviewStatus }),
+    });
+    const data = await res.json().catch(() => ({}));
+    if (!res.ok) {
+      setStatus(data.error || "No se pudo revisar el comentario.");
+      return;
+    }
+    setStatus(reviewStatus === "approved" ? "Comentario aprobado y publicado." : "Comentario rechazado.");
+    await loadComments();
   }
 
   async function savePost(e: FormEvent) {
@@ -115,8 +139,9 @@ export default function BlogAdminPage() {
 
     const body = new FormData();
     body.append("file", file);
+    body.append("folder", "asoserlid/blog");
 
-    const res = await fetch("/api/admin/uploads", {
+    const res = await fetch("/api/admin/cloudinary-upload", {
       method: "POST",
       body,
     });
@@ -130,10 +155,10 @@ export default function BlogAdminPage() {
     }
 
     if (target === "cover") {
-      setForm((current) => ({ ...current, cover: data.imageUrl }));
+      setForm((current) => ({ ...current, cover: data.url || data.imageUrl }));
       setStatus("Imagen seleccionada y vinculada como portada.");
     } else {
-      insertImageInEditor(data.imageUrl);
+      insertImageInEditor(data.url || data.imageUrl);
       setStatus("Imagen seleccionada e insertada en el contenido.");
     }
   }
@@ -213,6 +238,7 @@ export default function BlogAdminPage() {
               </div>
             </aside>
 
+            <div className="grid gap-6">
             <form onSubmit={savePost} className="rounded-lg border border-slate-200 bg-white p-5 shadow-sm">
               <div className="grid gap-4 sm:grid-cols-2">
                 <Field label="Titulo">
@@ -337,6 +363,8 @@ export default function BlogAdminPage() {
                 )}
               </div>
             </form>
+            <BlogCommentsReview comments={comments} onReview={reviewComment} />
+            </div>
           </div>
         </>
       )}
@@ -365,5 +393,54 @@ function ToolbarButton({ children, onClick }: { children: ReactNode; onClick: ()
     >
       {children}
     </button>
+  );
+}
+
+function BlogCommentsReview({ comments, onReview }: { comments: BlogComment[]; onReview: (id: string, status: "approved" | "rejected") => void }) {
+  const pending = comments.filter((comment) => comment.status === "pending");
+  const reviewed = comments.filter((comment) => comment.status !== "pending").slice(0, 8);
+  return (
+    <section className="rounded-lg border border-slate-200 bg-white p-5 shadow-sm">
+      <div className="mb-4 flex flex-col justify-between gap-2 sm:flex-row sm:items-center">
+        <div>
+          <h2 className="text-lg font-bold text-[#173C61]">Comentarios del blog</h2>
+          <p className="text-sm text-slate-500">{pending.length} pendiente(s) de aprobacion</p>
+        </div>
+      </div>
+
+      <div className="space-y-3">
+        {pending.map((comment) => (
+          <article key={comment._id} className="rounded-lg border border-amber-200 bg-amber-50 p-4">
+            <div className="flex flex-col justify-between gap-3 sm:flex-row sm:items-start">
+              <div>
+                <p className="text-xs font-semibold uppercase tracking-wide text-amber-700">{comment.postTitle || comment.postSlug}</p>
+                <p className="mt-1 font-bold text-[#173C61]">{comment.authorName}</p>
+                {comment.authorEmail && <p className="text-xs text-slate-500">{comment.authorEmail}</p>}
+              </div>
+              <div className="flex gap-2">
+                <button type="button" onClick={() => comment._id && onReview(comment._id, "approved")} className="rounded-md bg-emerald-700 px-3 py-2 text-sm font-bold text-white hover:bg-emerald-800">Aprobar</button>
+                <button type="button" onClick={() => comment._id && onReview(comment._id, "rejected")} className="rounded-md bg-red-700 px-3 py-2 text-sm font-bold text-white hover:bg-red-800">Rechazar</button>
+              </div>
+            </div>
+            <p className="mt-3 text-sm leading-relaxed text-slate-700">{comment.content}</p>
+          </article>
+        ))}
+        {pending.length === 0 && <p className="rounded-md border border-slate-200 bg-slate-50 px-4 py-3 text-sm text-slate-500">No hay comentarios pendientes.</p>}
+      </div>
+
+      {reviewed.length > 0 && (
+        <div className="mt-5">
+          <h3 className="text-sm font-bold uppercase tracking-wide text-slate-500">Ultimos revisados</h3>
+          <div className="mt-3 space-y-2">
+            {reviewed.map((comment) => (
+              <div key={comment._id} className="rounded-md border border-slate-200 px-3 py-2 text-sm">
+                <span className="font-semibold text-[#173C61]">{comment.authorName}</span>
+                <span className="text-slate-500"> | {comment.status === "approved" ? "Aprobado" : "Rechazado"} | {comment.postTitle || comment.postSlug}</span>
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
+    </section>
   );
 }

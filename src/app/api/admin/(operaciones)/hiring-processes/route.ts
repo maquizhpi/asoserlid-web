@@ -45,7 +45,9 @@ export async function POST(req: NextRequest) {
     const { _id, ...document } = input;
     void _id;
     const result = await db.collection<Document>(collection).insertOne({ ...document, createdAt: now, updatedAt: now });
-    return NextResponse.json({ ok: true, item: { ...input, _id: result.insertedId.toString(), createdAt: now.toISOString(), updatedAt: now.toISOString() } }, { status: 201 });
+    const item = { ...input, _id: result.insertedId.toString(), createdAt: now.toISOString(), updatedAt: now.toISOString() };
+    await createHiringProcessNotifications(db, item, now);
+    return NextResponse.json({ ok: true, item }, { status: 201 });
   } catch (error) {
     return NextResponse.json({ ok: false, error: getOperationsErrorMessage(error) }, { status: 400 });
   }
@@ -109,6 +111,33 @@ export function serializeProcess(document: Document) {
   return syncHiringAliases(item);
 }
 
+export async function createHiringProcessNotifications(db: Awaited<ReturnType<typeof getDb>>, process: HiringProcess, date = new Date()) {
+  const roles = ["legal_representative", "supervisor", "operations", "administrator"];
+  const dueDate = date.toISOString().slice(0, 10);
+  const title = "Nuevo proceso de contratacion";
+  const group = process.workGroupName ? ` Grupo responsable: ${process.workGroupName}.` : "";
+  const identifier = process._id || process.numeroProceso;
+  const message = `${identifier} | ${process.numeroProceso} - ${process.entidadCliente}.${group} Revisa cronograma, agenda y seguimiento del proceso.`;
+
+  for (const role of roles) {
+    const existing = await db.collection("notifications").findOne({
+      title,
+      role,
+      message: { $regex: escapeRegex(identifier) },
+    });
+    if (existing) continue;
+    await db.collection("notifications").insertOne({
+      title,
+      role,
+      message,
+      dueDate,
+      status: "active",
+      createdAt: date,
+      updatedAt: date,
+    });
+  }
+}
+
 async function ensureDefaultHiringProcess() {
   const db = await getDb();
   await db.collection<Document>(collection).createIndex({ numeroProceso: 1 }, { unique: true });
@@ -154,4 +183,8 @@ async function ensureDefaultHiringProcess() {
   const { _id, ...document } = process;
   void _id;
   await db.collection<Document>(collection).insertOne({ ...document, createdAt: now, updatedAt: now });
+}
+
+function escapeRegex(value: string) {
+  return value.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
 }
