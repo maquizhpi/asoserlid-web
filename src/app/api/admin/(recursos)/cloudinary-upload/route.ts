@@ -3,7 +3,7 @@ import { hasModuleAccess } from "@/lib/adminAuth";
 import { getCloudinary } from "@/lib/cloudinary";
 
 export async function POST(req: NextRequest) {
-  const canUpload = await Promise.all(["machines", "workers", "worker-documents", "worker-intake", "service-types", "catalogs", "blog", "gallery", "certifications"].map((module) => hasModuleAccess(module)));
+  const canUpload = await Promise.all(["machines", "workers", "worker-documents", "worker-intake", "service-types", "catalogs", "blog", "gallery", "certifications", "work-groups"].map((module) => hasModuleAccess(module)));
   if (!canUpload.some(Boolean)) {
     return NextResponse.json({ ok: false, error: "No autorizado." }, { status: 401 });
   }

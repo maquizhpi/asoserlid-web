@@ -161,8 +161,27 @@ export const serviceTypeSchema = z.object({
 export const workGroupSchema = z.object({
   name: text("El nombre del grupo es obligatorio."),
   description: optionalText,
+  logoUrl: optionalText,
+  logoPublicId: optionalText,
+  taxId: optionalText,
+  legalName: optionalText,
+  commercialName: optionalText,
+  address: optionalText,
+  legalRepresentativeId: optionalText,
+  legalRepresentativeName: optionalText,
+  legalRepresentativeDocumentId: optionalText,
+  companyEmail: optionalText,
+  companyPhone: optionalText,
   supervisorId: optionalText,
   supervisorName: optionalText,
+  bankAccounts: z.array(z.object({
+    id: idText,
+    bankName: optionalText,
+    accountType: optionalText,
+    accountNumber: optionalText,
+    accountHolder: optionalText,
+    notes: optionalText,
+  }).strip()).default([]),
   status: z.enum(["active", "inactive"]).default("active"),
 }).strip();
 
@@ -511,32 +530,42 @@ export const certificationSchema = z.object({
   status: z.enum(["active", "inactive"]).default("active"),
 }).strip();
 
-export function createCrudStore<T>(collectionName: string, schema: z.ZodType<Omit<T, "_id" | "createdAt" | "updatedAt">>) {
+export function createCrudStore<T>(
+  collectionName: string,
+  schema: z.ZodType<Omit<T, "_id" | "createdAt" | "updatedAt">>,
+  options: {
+    beforeSave?: (data: Omit<T, "_id" | "createdAt" | "updatedAt">) => Omit<T, "_id" | "createdAt" | "updatedAt">;
+    afterRead?: (item: T) => T;
+  } = {}
+) {
   return {
     async list() {
       const db = await getDb();
       const items = await db.collection<Document>(collectionName).find().sort({ createdAt: -1 }).toArray();
-      return items.map((item) => serialize(item as BaseDocument<T>));
+      return items.map((item) => options.afterRead ? options.afterRead(serialize(item as BaseDocument<T>)) : serialize(item as BaseDocument<T>));
     },
 
     async create(input: unknown) {
-      const data = normalize(schema.parse(input));
+      const data = options.beforeSave ? options.beforeSave(normalize(schema.parse(input))) : normalize(schema.parse(input));
       const db = await getDb();
       const now = new Date();
       const document = { ...data, createdAt: now, updatedAt: now } as BaseDocument<T>;
       const result = await db
         .collection<Document>(collectionName)
         .insertOne(document as OptionalUnlessRequiredId<BaseDocument<T>>);
-      return serialize({ ...document, _id: result.insertedId });
+      const item = serialize({ ...document, _id: result.insertedId } as BaseDocument<T>);
+      return options.afterRead ? options.afterRead(item) : item;
     },
 
     async update(id: string, input: unknown) {
-      const data = normalize(schema.parse(input));
+      const data = options.beforeSave ? options.beforeSave(normalize(schema.parse(input))) : normalize(schema.parse(input));
       const db = await getDb();
       const result = await db
         .collection<Document>(collectionName)
         .findOneAndUpdate({ _id: new ObjectId(id) }, { $set: { ...data, updatedAt: new Date() } }, { returnDocument: "after" });
-      return result ? serialize(result as BaseDocument<T>) : null;
+      if (!result) return null;
+      const item = serialize(result as BaseDocument<T>);
+      return options.afterRead ? options.afterRead(item) : item;
     },
 
     async remove(id: string) {

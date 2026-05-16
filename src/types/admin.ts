@@ -315,12 +315,33 @@ export type TalentPersonalReference = {
   residence?: string;
 };
 
+export type WorkGroupBankAccount = {
+  id: string;
+  bankName?: string;
+  accountType?: string;
+  accountNumber?: string;
+  accountHolder?: string;
+  notes?: string;
+};
+
 export type WorkGroup = {
   _id?: string;
   name: string;
   description?: string;
+  logoUrl?: string;
+  logoPublicId?: string;
+  taxId?: string;
+  legalName?: string;
+  commercialName?: string;
+  address?: string;
+  legalRepresentativeId?: string;
+  legalRepresentativeName?: string;
+  legalRepresentativeDocumentId?: string;
+  companyEmail?: string;
+  companyPhone?: string;
   supervisorId?: string;
   supervisorName?: string;
+  bankAccounts?: WorkGroupBankAccount[];
   status: "active" | "inactive";
   createdAt?: string;
   updatedAt?: string;
