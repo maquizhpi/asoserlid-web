@@ -3,6 +3,7 @@
 import { FormEvent, ReactNode, useEffect, useMemo, useState } from "react";
 import SearchableSelect from "@/components/system/SearchableSelect";
 import SystemModulePage from "@/components/system/SystemModulePage";
+import { getDefaultAccessForRoles } from "@/lib/roleAccess";
 import { roleLabels } from "@/lib/userRoles";
 import type { AdminOverviewItem, AdminUser, AdminUserInput, UserRole, Worker } from "@/types/admin";
 
@@ -113,10 +114,16 @@ export default function UsersModulePage() {
       ? userForm.roles.filter((currentRole) => currentRole !== role)
       : [...userForm.roles, role];
 
-    setUserForm({ ...userForm, roles: roles.length ? roles : userForm.roles });
+    const nextRoles = roles.length ? roles : userForm.roles;
+    setUserForm({
+      ...userForm,
+      roles: nextRoles,
+      moduleAccess: Array.from(new Set([...userForm.moduleAccess, ...getDefaultAccessForRoles(nextRoles)])),
+    });
   }
 
   function toggleModuleAccess(moduleKey: string) {
+    if (roleModuleAccess.has(moduleKey)) return;
     const moduleAccess = userForm.moduleAccess.includes(moduleKey)
       ? userForm.moduleAccess.filter((currentModule) => currentModule !== moduleKey)
       : [...userForm.moduleAccess, moduleKey];
@@ -134,6 +141,8 @@ export default function UsersModulePage() {
         })),
     [workers]
   );
+  const roleModuleAccess = useMemo(() => new Set(getDefaultAccessForRoles(userForm.roles)), [userForm.roles]);
+  const isAdministrator = userForm.roles.includes("administrator");
 
   return (
     <SystemModulePage moduleKey="users">
@@ -228,8 +237,16 @@ export default function UsersModulePage() {
             <div className="mt-3 grid gap-2 sm:grid-cols-2">
               {modules.map((module) => (
                 <label key={module.key} className="flex items-center gap-3 rounded-md bg-slate-50 px-3 py-2 text-sm text-slate-700">
-                  <input type="checkbox" checked={userForm.moduleAccess.includes(module.key)} onChange={() => toggleModuleAccess(module.key)} />
-                  {module.title}
+                  <input
+                    type="checkbox"
+                    checked={isAdministrator || roleModuleAccess.has(module.key) || userForm.moduleAccess.includes(module.key)}
+                    disabled={isAdministrator || roleModuleAccess.has(module.key)}
+                    onChange={() => toggleModuleAccess(module.key)}
+                  />
+                  <span className="min-w-0 flex-1">{module.title}</span>
+                  {(isAdministrator || roleModuleAccess.has(module.key)) && (
+                    <span className="rounded-full bg-[#E6F8F9] px-2 py-1 text-[11px] font-bold text-[#173C61]">Por rol</span>
+                  )}
                 </label>
               ))}
             </div>

@@ -3,6 +3,7 @@ import { ObjectId } from "mongodb";
 import { hasModuleAccess } from "@/lib/adminAuth";
 import { getDb } from "@/lib/mongodb";
 import { contractSchema, createCrudStore, getOperationsErrorMessage, validateContractStaffAvailability } from "@/lib/operationsStore";
+import { getWorkGroupScope, isRecordInWorkGroupScope } from "@/lib/workGroupScope";
 import type { ServiceContract } from "@/types/admin";
 
 const store = createCrudStore<ServiceContract>("contracts", contractSchema);
@@ -13,6 +14,8 @@ export async function PUT(req: NextRequest, context: RouteContext) {
   try {
     const { id } = await context.params;
     const input = contractSchema.parse(await req.json());
+    const scope = await getWorkGroupScope();
+    if (!scope || !isRecordInWorkGroupScope(input, scope)) return NextResponse.json({ ok: false, error: "No autorizado para este grupo de trabajo." }, { status: 403 });
     await validateContractStaffAvailability(input, id);
     const item = await store.update(id, input);
     return item ? NextResponse.json({ ok: true, item }) : NextResponse.json({ ok: false, error: "No encontrado." }, { status: 404 });
@@ -27,6 +30,8 @@ export async function DELETE(_req: NextRequest, context: RouteContext) {
     const { id } = await context.params;
     const db = await getDb();
     const existing = await db.collection("contracts").findOne({ _id: new ObjectId(id) });
+    const scope = await getWorkGroupScope();
+    if (!scope || !isRecordInWorkGroupScope(existing, scope)) return NextResponse.json({ ok: false, error: "No autorizado para este grupo de trabajo." }, { status: 403 });
     const hasHierarchy = Array.isArray(existing?.workplaces) && existing.workplaces.some((workplace) =>
       workplace?.areas?.some((area: { shifts?: { assignedStaff?: unknown[] }[] }) =>
         area.shifts?.some((shift) => (shift.assignedStaff || []).length > 0)

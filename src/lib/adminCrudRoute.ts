@@ -1,6 +1,6 @@
 import "server-only";
 
-import { ObjectId, type Document } from "mongodb";
+import { ObjectId, type Document, type Filter } from "mongodb";
 import { NextRequest, NextResponse } from "next/server";
 import { hasModuleAccess } from "@/lib/adminAuth";
 import { auditSummary, getRecordLabel, recordAuditLog, serializeSnapshot } from "@/lib/auditStore";
@@ -12,10 +12,10 @@ export function createAdminCrudHandlers<T>(collection: string, moduleKey: string
   const store = createCrudStore<T>(collection, schema);
 
   return {
-    async list() {
+    async list(query: Filter<Document> = {}) {
       if (!(await hasModuleAccess(moduleKey))) return NextResponse.json({ ok: false, error: "No autorizado." }, { status: 401 });
       try {
-        return NextResponse.json({ ok: true, items: await store.list() });
+        return NextResponse.json({ ok: true, items: await store.list(query) });
       } catch (error) {
         return NextResponse.json({ ok: false, error: getOperationsErrorMessage(error) }, { status: 500 });
       }

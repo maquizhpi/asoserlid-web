@@ -1,4 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
+import { getEffectiveModuleAccess } from "@/lib/roleAccess";
+import type { UserRole } from "@/types/admin";
 
 type AdminSession = {
   roles?: string[];
@@ -58,7 +60,8 @@ export async function proxy(req: NextRequest) {
   }
 
   const isAdmin = session.roles?.includes("administrator");
-  const hasAccess = requiredModules.some((moduleKey) => session.moduleAccess?.includes(moduleKey));
+  const effectiveAccess = getEffectiveModuleAccess((session.roles || []) as UserRole[], session.moduleAccess || []);
+  const hasAccess = requiredModules.some((moduleKey) => effectiveAccess.includes(moduleKey));
 
   if (!isAdmin && !hasAccess) {
     return redirectToAdmin(req);

@@ -2,25 +2,13 @@ import "server-only";
 
 import { ObjectId } from "mongodb";
 import { z } from "zod";
-import { adminModules } from "@/lib/adminModules";
 import { getDb } from "@/lib/mongodb";
 import { hashPassword, verifyPassword } from "@/lib/passwords";
+import { getDefaultAccessForRoles, getEffectiveModuleAccess } from "@/lib/roleAccess";
 import { roleLabels, userRoles } from "@/lib/userRoles";
-import type { AdminUser, UserRole } from "@/types/admin";
+import type { AdminUser } from "@/types/admin";
 
 const usersCollection = "users";
-
-const roleAccess: Record<UserRole, string[]> = {
-  administrator: adminModules.map((module) => module.key),
-  supervisor: ["dashboard-supervisor", "workers", "work-groups", "clients", "contracts-shifts", "supervisor-daily-report", "machines", "hiring-processes", "process-calendar", "notifications"],
-  operations: ["clients", "work-groups", "contracts-shifts", "supervisor-daily-report", "report-approvals", "machines", "supply-products", "supply-kits", "supply-control", "hiring-processes", "process-calendar", "notifications", "audits"],
-  human_resources: ["workers", "worker-intake", "worker-documents", "labor-history", "work-groups", "contracts-shifts", "supervisor-daily-report", "report-approvals", "notifications"],
-  accounting: ["dashboard-accounting", "accounting", "payment-calculation", "exports", "report-approvals", "notifications"],
-  advertising: ["blog", "gallery", "certifications", "notifications"],
-  legal_representative: ["contracts-shifts", "supervisor-daily-report", "hiring-processes", "process-calendar", "notifications"],
-  client: ["contracts-shifts", "supervisor-daily-report", "exports", "supply-products", "supply-kits", "notifications"],
-  worker: ["supervisor-daily-report"],
-};
 
 const userInputSchema = z.object({
   workerId: z.string().trim().optional().or(z.literal("")),
@@ -42,10 +30,6 @@ type UserDocument = Omit<AdminUser, "_id" | "createdAt" | "updatedAt"> & {
 
 export function getRoleOptions() {
   return userRoles.map((value) => ({ value, label: roleLabels[value] }));
-}
-
-export function getDefaultAccessForRoles(roles: UserRole[]) {
-  return Array.from(new Set(roles.flatMap((role) => roleAccess[role] || [])));
 }
 
 export async function ensureDefaultAdminUser() {
@@ -94,6 +78,15 @@ export async function validateUserCredentials(emailInput: string, password: stri
       { _id: user._id },
       { $set: { passwordHash: await hashPassword(password), updatedAt: new Date() } }
     );
+  }
+
+  const effectiveAccess = getEffectiveModuleAccess(user.roles, user.moduleAccess);
+  if (user._id && !sameStringSet(effectiveAccess, user.moduleAccess)) {
+    await db.collection<UserDocument>(usersCollection).updateOne(
+      { _id: user._id },
+      { $set: { moduleAccess: effectiveAccess, updatedAt: new Date() } }
+    );
+    user.moduleAccess = effectiveAccess;
   }
 
   return serializeUser(user);
@@ -241,18 +234,11 @@ export function getUserStoreErrorMessage(error: unknown) {
 }
 
 function normalizeUserInput(user: z.infer<typeof userInputSchema>) {
-  const allowedModules = new Set(adminModules.map((module) => module.key));
-  const roleModules = getDefaultAccessForRoles(user.roles);
-  const selectedModules = user.moduleAccess.filter((module) => allowedModules.has(module));
-  const moduleAccess = user.roles.includes("administrator")
-    ? getDefaultAccessForRoles(["administrator"])
-    : Array.from(new Set([...roleModules, ...selectedModules]));
-
   return {
     ...user,
     email: normalizeEmail(user.email),
     password: user.password || undefined,
-    moduleAccess,
+    moduleAccess: getEffectiveModuleAccess(user.roles, user.moduleAccess),
   };
 }
 
@@ -268,11 +254,17 @@ function serializeUser(user: UserDocument): AdminUser {
     name: user.name,
     email: user.email,
     roles: user.roles,
-    moduleAccess: user.moduleAccess,
+    moduleAccess: getEffectiveModuleAccess(user.roles, user.moduleAccess),
     active: user.active,
     createdAt: user.createdAt.toISOString(),
     updatedAt: user.updatedAt.toISOString(),
   };
+}
+
+function sameStringSet(left: string[], right: string[] = []) {
+  if (left.length !== right.length) return false;
+  const rightSet = new Set(right);
+  return left.every((item) => rightSet.has(item));
 }
 
 function isDuplicateKey(error: unknown) {

@@ -1,6 +1,6 @@
 import "server-only";
 
-import { ObjectId, type Document, type OptionalUnlessRequiredId } from "mongodb";
+import { ObjectId, type Document, type Filter, type OptionalUnlessRequiredId } from "mongodb";
 import { z } from "zod";
 import { getDb } from "@/lib/mongodb";
 
@@ -539,9 +539,9 @@ export function createCrudStore<T>(
   } = {}
 ) {
   return {
-    async list() {
+    async list(query: Filter<Document> = {}) {
       const db = await getDb();
-      const items = await db.collection<Document>(collectionName).find().sort({ createdAt: -1 }).toArray();
+      const items = await db.collection<Document>(collectionName).find(query).sort({ createdAt: -1 }).toArray();
       return items.map((item) => options.afterRead ? options.afterRead(serialize(item as BaseDocument<T>)) : serialize(item as BaseDocument<T>));
     },
 

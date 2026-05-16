@@ -4,19 +4,37 @@ import { FormEvent, useCallback, useEffect, useState } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import SystemShell from "@/components/system/SystemShell";
-import type { AdminOverviewItem, HiringProcess } from "@/types/admin";
+import { roleLabels } from "@/lib/userRoles";
+import type { AdminOverviewItem, HiringProcess, UserRole } from "@/types/admin";
 
 type DashboardStats = {
   activeWorkers: number;
   todayReports: number;
+  submittedReports: number;
+  approvedReports: number;
+  observedReports: number;
+  pendingApprovals: number;
   absences: number;
+  permissions: number;
+  sickness: number;
   overtimeHours: number;
   fines: number;
   activeClients: number;
   activeProcesses: number;
   lateProcesses: number;
   upcomingProcesses: number;
+  activeMachines: number;
+  supplyProducts: number;
+  monthlyKits: number;
+  activeNotifications: number;
   areaIndicators: { area: string; total: number; late: number; upcoming: number }[];
+};
+
+type SessionUser = {
+  name: string;
+  email: string;
+  roles: UserRole[];
+  moduleAccess: string[];
 };
 
 const redirectStorageKey = "asoserlid_admin_redirect_after_login";
@@ -27,23 +45,35 @@ export default function AdminPage() {
   const [loading, setLoading] = useState(true);
   const [login, setLogin] = useState({ email: "", password: "" });
   const [modules, setModules] = useState<AdminOverviewItem[]>([]);
+  const [sessionUser, setSessionUser] = useState<SessionUser | null>(null);
   const [dashboardStats, setDashboardStats] = useState<DashboardStats | null>(null);
   const [status, setStatus] = useState<string | null>(null);
 
-  const loadDashboardStats = useCallback(async () => {
-    const [workersRes, clientsRes, reportsRes, processesRes] = await Promise.all([
-      fetch("/api/admin/workers", { cache: "no-store" }),
-      fetch("/api/admin/clients", { cache: "no-store" }),
-      fetch("/api/admin/supervisor-reports", { cache: "no-store" }),
-      fetch("/api/admin/hiring-processes", { cache: "no-store" }),
+  const loadDashboardStats = useCallback(async (user: SessionUser, visibleModules: AdminOverviewItem[]) => {
+    const visibleKeys = new Set(visibleModules.map((module) => module.key));
+    const canAccess = (keys: string[]) => user.roles.includes("administrator") || keys.some((key) => visibleKeys.has(key) || user.moduleAccess.includes(key));
+    const [
+      workersData,
+      clientsData,
+      reportsData,
+      processesData,
+      machinesData,
+      supplyProductsData,
+      supplyKitsData,
+      notificationsData,
+    ] = await Promise.all([
+      fetchJsonIf(canAccess(["workers", "labor-history"]), "/api/admin/workers"),
+      fetchJsonIf(canAccess(["clients", "contracts-shifts"]), "/api/admin/clients"),
+      fetchJsonIf(canAccess(["supervisor-daily-report", "report-approvals", "dashboard-supervisor", "dashboard-accounting", "accounting", "payment-calculation", "exports"]), "/api/admin/supervisor-reports"),
+      fetchJsonIf(canAccess(["hiring-processes", "process-calendar", "notifications"]), "/api/admin/hiring-processes"),
+      fetchJsonIf(canAccess(["machines"]), "/api/admin/machines"),
+      fetchJsonIf(canAccess(["supply-products", "supply-control"]), "/api/admin/supply-products"),
+      fetchJsonIf(canAccess(["supply-kits", "supply-control"]), "/api/admin/supply-kits"),
+      fetchJsonIf(canAccess(["notifications"]), "/api/admin/notifications"),
     ]);
-    const workersData = await workersRes.json().catch(() => ({}));
-    const clientsData = await clientsRes.json().catch(() => ({}));
-    const reportsData = await reportsRes.json().catch(() => ({}));
-    const processesData = await processesRes.json().catch(() => ({}));
     const today = new Date().toISOString().slice(0, 10);
-    const reports = reportsRes.ok ? reportsData.items || [] : [];
-    const processes: HiringProcess[] = processesRes.ok ? processesData.items || [] : [];
+    const reports = reportsData.items || [];
+    const processes: HiringProcess[] = processesData.items || [];
     const activeProcesses = processes.filter((process) => !["completed", "cancelled"].includes(process.status));
     const areaMap = new Map<string, { area: string; total: number; late: number; upcoming: number }>();
 
@@ -58,10 +88,16 @@ export default function AdminPage() {
     });
 
     setDashboardStats({
-      activeWorkers: workersRes.ok ? (workersData.items || []).filter((worker: { status?: string }) => worker.status === "active").length : 0,
-      activeClients: clientsRes.ok ? (clientsData.items || []).filter((client: { status?: string }) => client.status === "active").length : 0,
+      activeWorkers: (workersData.items || []).filter((worker: { status?: string }) => worker.status === "active").length,
+      activeClients: (clientsData.items || []).filter((client: { status?: string }) => client.status === "active").length,
       todayReports: reports.filter((report: { date?: string }) => report.date === today).length,
+      submittedReports: reports.filter((report: { reportStatus?: string }) => report.reportStatus === "submitted").length,
+      approvedReports: reports.filter((report: { reportStatus?: string }) => report.reportStatus === "approved").length,
+      observedReports: reports.filter((report: { reportStatus?: string }) => report.reportStatus === "observed").length,
+      pendingApprovals: reports.filter((report: { reportStatus?: string }) => ["draft", "submitted", "observed"].includes(report.reportStatus || "draft")).length,
       absences: reports.filter((report: { attendanceStatus?: string }) => report.attendanceStatus === "absent").length,
+      permissions: reports.filter((report: { attendanceStatus?: string }) => report.attendanceStatus === "permission").length,
+      sickness: reports.filter((report: { attendanceStatus?: string }) => report.attendanceStatus === "sick").length,
       overtimeHours: reports.reduce((sum: number, report: { overtimeHours?: number }) => sum + Number(report.overtimeHours || 0), 0),
       fines: reports.reduce((sum: number, report: { fineAmount?: number }) => sum + Number(report.fineAmount || 0), 0),
       activeProcesses: activeProcesses.length,
@@ -70,6 +106,10 @@ export default function AdminPage() {
         const days = daysUntil(process.dueDate, today);
         return days >= 0 && days <= 7;
       }).length,
+      activeMachines: (machinesData.items || machinesData.machines || []).filter((machine: { status?: string }) => machine.status !== "inactive").length,
+      supplyProducts: (supplyProductsData.items || []).length,
+      monthlyKits: (supplyKitsData.items || []).length,
+      activeNotifications: (notificationsData.items || []).filter((notification: { status?: string }) => notification.status === "active").length,
       areaIndicators: Array.from(areaMap.values()).sort((a, b) => b.total - a.total),
     });
   }, []);
@@ -78,23 +118,29 @@ export default function AdminPage() {
     setLoading(true);
     setStatus(null);
 
-    const res = await fetch("/api/admin/modules", { cache: "no-store" });
-    if (res.status === 401) {
+    const [modulesRes, meRes] = await Promise.all([
+      fetch("/api/admin/modules", { cache: "no-store" }),
+      fetch("/api/admin/me", { cache: "no-store" }),
+    ]);
+    if (modulesRes.status === 401 || meRes.status === 401) {
       setAuthenticated(false);
       setLoading(false);
       return;
     }
 
-    const data = await res.json().catch(() => ({}));
-    if (!res.ok) {
+    const data = await modulesRes.json().catch(() => ({}));
+    const meData = await meRes.json().catch(() => ({}));
+    if (!modulesRes.ok || !meRes.ok) {
       setStatus(data.error || "No se pudo cargar el sistema.");
       setLoading(false);
       return;
     }
 
-    setModules(data.modules || []);
+    const visibleModules = data.modules || [];
+    setModules(visibleModules);
+    setSessionUser(meData.user || null);
     setAuthenticated(true);
-    await loadDashboardStats();
+    if (meData.user) await loadDashboardStats(meData.user, visibleModules);
     setLoading(false);
   }, [loadDashboardStats]);
 
@@ -219,17 +265,37 @@ export default function AdminPage() {
   }
 
   return (
-    <SystemShell title="Sistema Integrado de Trabajo" subtitle="Modulos internos obligatorios para operacion, control y reportes.">
+    <SystemShell title="Sistema Integrado de Trabajo" subtitle="Dashboard principal y funciones asignadas a tu usuario.">
       {status && <p className="mb-5 rounded-md border border-slate-200 bg-white px-4 py-3 text-sm text-slate-700">{status}</p>}
 
+      <section className="mb-6 overflow-hidden rounded-lg border border-slate-200 bg-white shadow-sm">
+        <div className="bg-gradient-to-r from-[#173C61] via-[#218F93] to-[#7AC143] px-5 py-5 text-white">
+          <p className="text-xs font-bold uppercase tracking-[0.18em] text-white/75">Panel principal</p>
+          <h2 className="mt-2 text-2xl font-bold">Bienvenido{sessionUser?.name ? `, ${sessionUser.name}` : ""}</h2>
+          <p className="mt-2 max-w-3xl text-sm leading-6 text-white/85">
+            Acceso activo para {sessionUser ? formatRoles(sessionUser.roles) : "tu usuario"}. Solo se muestran las funciones que tienes asignadas.
+          </p>
+        </div>
+      </section>
+
       {dashboardStats && (
-        <section className="mb-6 grid gap-3 sm:grid-cols-2 xl:grid-cols-6">
-          <StatCard label="Trabajadores activos" value={String(dashboardStats.activeWorkers)} />
-          <StatCard label="Asistencia diaria" value={String(dashboardStats.todayReports)} />
-          <StatCard label="Faltas" value={String(dashboardStats.absences)} />
-          <StatCard label="Horas extras" value={dashboardStats.overtimeHours.toFixed(2)} />
-          <StatCard label="Multas" value={`$ ${dashboardStats.fines.toFixed(2)}`} />
-          <StatCard label="Clientes activos" value={String(dashboardStats.activeClients)} />
+        <section className="mb-6 grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
+          <StatCard label="Trabajadores activos" value={String(dashboardStats.activeWorkers)} tone="blue" />
+          <StatCard label="Clientes activos" value={String(dashboardStats.activeClients)} tone="green" />
+          <StatCard label="Asistencia hoy" value={String(dashboardStats.todayReports)} tone="cyan" />
+          <StatCard label="Pendientes aprobacion" value={String(dashboardStats.pendingApprovals)} tone={dashboardStats.pendingApprovals ? "warning" : "green"} />
+          <StatCard label="Reportes enviados" value={String(dashboardStats.submittedReports)} tone="blue" />
+          <StatCard label="Reportes aprobados" value={String(dashboardStats.approvedReports)} tone="green" />
+          <StatCard label="Reportes observados" value={String(dashboardStats.observedReports)} tone={dashboardStats.observedReports ? "warning" : "normal"} />
+          <StatCard label="Notificaciones activas" value={String(dashboardStats.activeNotifications)} tone={dashboardStats.activeNotifications ? "cyan" : "normal"} />
+          <StatCard label="Faltas" value={String(dashboardStats.absences)} tone={dashboardStats.absences ? "danger" : "normal"} />
+          <StatCard label="Permisos" value={String(dashboardStats.permissions)} tone="blue" />
+          <StatCard label="Enfermedad" value={String(dashboardStats.sickness)} tone="cyan" />
+          <StatCard label="Horas extras" value={dashboardStats.overtimeHours.toFixed(2)} tone="green" />
+          <StatCard label="Multas" value={`$ ${dashboardStats.fines.toFixed(2)}`} tone={dashboardStats.fines ? "danger" : "normal"} />
+          <StatCard label="Equipos activos" value={String(dashboardStats.activeMachines)} tone="blue" />
+          <StatCard label="Productos insumos" value={String(dashboardStats.supplyProducts)} tone="green" />
+          <StatCard label="Kits mensuales" value={String(dashboardStats.monthlyKits)} tone="cyan" />
         </section>
       )}
 
@@ -263,12 +329,19 @@ export default function AdminPage() {
   );
 }
 
-function StatCard({ label, value, tone = "normal" }: { label: string; value: string; tone?: "normal" | "warning" | "danger" }) {
-  const color = tone === "danger" ? "text-red-700" : tone === "warning" ? "text-amber-700" : "text-[#173C61]";
+function StatCard({ label, value, tone = "normal" }: { label: string; value: string; tone?: "normal" | "warning" | "danger" | "blue" | "green" | "cyan" }) {
+  const styles = {
+    normal: "border-slate-200 bg-white text-[#173C61]",
+    warning: "border-amber-200 bg-amber-50 text-amber-800",
+    danger: "border-red-200 bg-red-50 text-red-800",
+    blue: "border-blue-200 bg-blue-50 text-blue-800",
+    green: "border-emerald-200 bg-emerald-50 text-emerald-800",
+    cyan: "border-cyan-200 bg-cyan-50 text-cyan-800",
+  }[tone];
   return (
-    <div className="rounded-lg border border-slate-200 bg-white p-4 shadow-sm">
+    <div className={`rounded-lg border p-4 shadow-sm ${styles}`}>
       <p className="text-xs font-bold uppercase tracking-[0.1em] text-slate-500">{label}</p>
-      <p className={`mt-2 text-2xl font-bold ${color}`}>{value}</p>
+      <p className="mt-2 text-2xl font-bold">{value}</p>
     </div>
   );
 }
@@ -290,22 +363,37 @@ function DashboardGroup({ title, modules }: { title: string; modules: AdminOverv
       <h2 className="mb-3 text-sm font-bold uppercase tracking-[0.14em] text-slate-500">{title}</h2>
       <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-3">
         {modules.map((module) => (
-          <Link
+          <article
             key={module.key}
-            href={module.href}
-            className="rounded-lg border border-slate-200 bg-white p-4 shadow-sm transition hover:border-[#33C3C9] hover:bg-[#F7FEFF]"
+            className="flex min-h-40 flex-col justify-between rounded-lg border border-slate-200 bg-white p-4 shadow-sm transition hover:border-[#33C3C9] hover:bg-[#F7FEFF]"
           >
             <div className="flex items-start justify-between gap-3">
               <h3 className="font-bold text-[#173C61]">{module.title}</h3>
-              <span className="rounded-full bg-slate-100 px-2 py-1 text-xs font-semibold text-slate-600">
-                {module.required ? "Obligatorio" : "Opcional"}
+              <span className="rounded-full bg-[#E6F8F9] px-2 py-1 text-xs font-semibold text-[#173C61]">
+                Asignado
               </span>
             </div>
-            <p className="mt-2 min-h-10 text-sm text-slate-600">{module.description}</p>
-            <p className="mt-4 text-sm font-semibold text-[#218F93]">Abrir modulo</p>
-          </Link>
+            <p className="mt-2 text-sm leading-6 text-slate-600">{module.description}</p>
+            <Link
+              href={module.href}
+              className="mt-4 inline-flex w-full items-center justify-center rounded-md bg-[#173C61] px-4 py-2.5 text-sm font-bold text-white transition hover:bg-[#218F93]"
+            >
+              Abrir {module.title}
+            </Link>
+          </article>
         ))}
       </div>
     </section>
   );
+}
+
+async function fetchJsonIf(allowed: boolean, url: string) {
+  if (!allowed) return {};
+  const response = await fetch(url, { cache: "no-store" });
+  if (!response.ok) return {};
+  return response.json().catch(() => ({}));
+}
+
+function formatRoles(roles: UserRole[]) {
+  return roles.map((role) => roleLabels[role] || role).join(", ");
 }

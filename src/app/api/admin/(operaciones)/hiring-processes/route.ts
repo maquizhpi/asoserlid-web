@@ -3,6 +3,7 @@ import { type Document } from "mongodb";
 import { hasModuleAccess } from "@/lib/adminAuth";
 import { getDb } from "@/lib/mongodb";
 import { getOperationsErrorMessage, hiringProcessSchema } from "@/lib/operationsStore";
+import { getWorkGroupScope, scopedWorkGroupQuery } from "@/lib/workGroupScope";
 import { createId, obtenerEstadoProceso, syncHiringAliases } from "@/lib/hiringProcessUtils";
 import type { AgendaActividad, CronogramaFecha, HiringProcess, HiringProcessFile } from "@/types/admin";
 
@@ -23,8 +24,10 @@ export async function GET() {
   if (!(await canReadProcesses())) return NextResponse.json({ ok: false, error: "No autorizado." }, { status: 401 });
   try {
     await ensureDefaultHiringProcess();
+    const scope = await getWorkGroupScope();
+    if (!scope) return NextResponse.json({ ok: false, error: "No autorizado." }, { status: 401 });
     const db = await getDb();
-    const items = await db.collection<Document>(collection).find().sort({ createdAt: -1 }).toArray();
+    const items = await db.collection<Document>(collection).find(scopedWorkGroupQuery(scope)).sort({ createdAt: -1 }).toArray();
     return NextResponse.json({ ok: true, items: items.map(serializeProcess) });
   } catch (error) {
     return NextResponse.json({ ok: false, error: getOperationsErrorMessage(error) }, { status: 500 });

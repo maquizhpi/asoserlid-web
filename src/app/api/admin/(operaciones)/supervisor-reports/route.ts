@@ -3,6 +3,7 @@ import { type Document } from "mongodb";
 import { getAdminSession, hasModuleAccess } from "@/lib/adminAuth";
 import { getDb } from "@/lib/mongodb";
 import { createCrudStore, getOperationsErrorMessage, supervisorReportSchema } from "@/lib/operationsStore";
+import { getWorkGroupScope, scopedWorkGroupQuery } from "@/lib/workGroupScope";
 import type { SupervisorReport, UserRole } from "@/types/admin";
 
 const store = createCrudStore<SupervisorReport>("supervisor_reports", supervisorReportSchema);
@@ -15,7 +16,9 @@ async function canUseReports() {
 export async function GET() {
   if (!(await canUseReports())) return NextResponse.json({ ok: false, error: "No autorizado." }, { status: 401 });
   try {
-    return NextResponse.json({ ok: true, items: await store.list() });
+    const scope = await getWorkGroupScope();
+    if (!scope) return NextResponse.json({ ok: false, error: "No autorizado." }, { status: 401 });
+    return NextResponse.json({ ok: true, items: await store.list(scopedWorkGroupQuery(scope)) });
   } catch (error) {
     return NextResponse.json({ ok: false, error: getOperationsErrorMessage(error) }, { status: 500 });
   }

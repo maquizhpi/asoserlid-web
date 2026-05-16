@@ -1,6 +1,6 @@
 import "server-only";
 
-import { ObjectId } from "mongodb";
+import { ObjectId, type Filter } from "mongodb";
 import { z } from "zod";
 import { ensureCounterAtLeast, getNextCode } from "@/lib/codeSequence";
 import { getDb } from "@/lib/mongodb";
@@ -57,11 +57,11 @@ type MachineDocument = Omit<Machine, "_id" | "createdAt" | "updatedAt"> & {
   updatedAt: Date;
 };
 
-export async function getMachines() {
+export async function getMachines(query: Filter<MachineDocument> = {}) {
   const db = await getDb();
   const machines = await db
     .collection<MachineDocument>(machinesCollection)
-    .find()
+    .find(query)
     .sort({ createdAt: -1 })
     .toArray();
 

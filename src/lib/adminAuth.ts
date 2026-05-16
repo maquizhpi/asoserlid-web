@@ -3,6 +3,7 @@ import "server-only";
 import { cookies } from "next/headers";
 import { createHmac, timingSafeEqual } from "crypto";
 import { getServerEnv } from "@/lib/env";
+import { getEffectiveModuleAccess } from "@/lib/roleAccess";
 import { getUserById, validateUserCredentials } from "@/lib/userStore";
 import type { AdminUser, UserRole } from "@/types/admin";
 
@@ -25,7 +26,7 @@ export async function isAdminAuthenticated() {
 export async function hasModuleAccess(moduleKey: string) {
   const session = await getAdminSession();
   if (!session) return false;
-  return session.roles.includes("administrator") || session.moduleAccess.includes(moduleKey);
+  return getEffectiveModuleAccess(session.roles as UserRole[], session.moduleAccess).includes(moduleKey);
 }
 
 export async function hasAnyRole(roles: string[]) {
