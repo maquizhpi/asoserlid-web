@@ -148,8 +148,8 @@ export const employeePositionSchema = z.object({
 export const serviceTypeSchema = z.object({
   code: text("El codigo de servicio es obligatorio."),
   name: text("El nombre del servicio es obligatorio."),
-  detail: text("El detalle del servicio es obligatorio."),
-  activities: text("Las actividades del servicio son obligatorias."),
+  detail: optionalText,
+  activities: optionalText,
   imageUrl: optionalText,
   imagePublicId: optionalText,
   regularPrice: optionalNumber,
@@ -191,6 +191,8 @@ export const clientSchema = z.object({
   address: text("La direccion es obligatoria."),
   contactName: text("El contacto es obligatorio."),
   contactPhone: text("El telefono de contacto es obligatorio."),
+  workGroupId: optionalText,
+  workGroupName: optionalText,
   status: z.enum(["active", "inactive"]).default("active"),
 }).strip();
 
@@ -416,6 +418,8 @@ export const supplyProductSchema = z.object({
   auxiliaryCode: optionalText,
   name: text("El nombre del producto es obligatorio."),
   category: text("La categoria es obligatoria."),
+  workGroupId: optionalText,
+  workGroupName: optionalText,
   brand: optionalText,
   unit: text("La unidad de medida es obligatoria."),
   unitsPerBox: optionalNumber,
@@ -455,6 +459,11 @@ export const hiringProcessSchema = z.object({
   areaResponsable: z.string().trim().default("Sin area"),
   workGroupId: optionalText,
   workGroupName: optionalText,
+  workGroups: z.array(z.object({
+    id: optionalText,
+    name: text("El nombre de la empresa es obligatorio."),
+    logoUrl: optionalText,
+  }).strip()).default([]),
   processOwner: optionalText,
   estadoProceso: z.enum(["Planificado", "En seguimiento", "Por vencer", "Vencido", "Adjudicado", "Desierto", "Cancelado", "Finalizado"]).default("Planificado"),
   winningCompany: optionalText,
@@ -478,6 +487,9 @@ export const hiringProcessSchema = z.object({
     fechaHoraInicio: z.string().min(10, "La fecha de inicio de la actividad es obligatoria.").trim(),
     fechaHoraFin: optionalText,
     responsable: optionalText,
+    workGroupId: optionalText,
+    workGroupName: optionalText,
+    workGroupLogoUrl: optionalText,
     prioridad: z.enum(["Alta", "Media", "Baja"]).default("Media"),
     estado: z.enum(["Pendiente", "En proceso", "Cumplido", "Vencido", "Reprogramado"]).default("Pendiente"),
     origen: z.enum(["Automatico", "Manual"]).default("Manual"),
@@ -506,8 +518,10 @@ export const hiringProcessSchema = z.object({
 
 export const notificationSchema = z.object({
   title: text("El titulo es obligatorio."),
-  role: z.enum(["administrator", "supervisor", "operations", "human_resources", "accounting", "advertising", "legal_representative", "client", "worker", "all"]),
+  role: z.enum(["administrator", "general_manager", "general_accountant", "general_secretary", "general_supervisor", "supervisor", "operations", "human_resources", "accounting", "advertising", "legal_representative", "client", "worker", "all"]),
   message: text("El mensaje es obligatorio."),
+  workGroupId: optionalText,
+  workGroupName: optionalText,
   dueDate: optionalText,
   status: z.enum(["active", "read", "archived"]).default("active"),
   acknowledgedBy: z.array(z.string().trim()).default([]),
@@ -667,10 +681,11 @@ export async function ensureDefaultEmployeePositions() {
   const now = new Date();
   const names = [
     "ADMINISTRADOR",
+    "GERENTE GENERAL",
     "PRESIDENTE",
     "REPRESENTANTE LEGAL",
-    "CONTADORA",
-    "SECRETARIA",
+    "CONTADORA GENERAL",
+    "SECRETARIA GENERAL",
     "SUPERVISOR GENERAL",
     "SUPERVISOR",
     "AUXILIAR DE LIMPIEZA",

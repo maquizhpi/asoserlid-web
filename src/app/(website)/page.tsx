@@ -187,9 +187,9 @@ export default function Home() {
       .then((data) => {
         const items = ((data.items || []) as ServiceType[]).map((item) => ({
           t: item.name,
-          d: item.detail,
-          long: item.detail,
-          bullets: item.activities.split(/\r?\n|,/).map((activity) => activity.trim()).filter(Boolean),
+          d: item.detail || item.name,
+          long: item.detail || item.name,
+          bullets: (item.activities || item.detail || item.name).split(/\r?\n|,/).map((activity) => activity.trim()).filter(Boolean),
           img: item.imageUrl || "/work3.jpg",
         }));
         setServiceItems(items);

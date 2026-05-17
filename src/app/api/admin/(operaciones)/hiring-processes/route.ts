@@ -1,14 +1,15 @@
 import { NextRequest, NextResponse } from "next/server";
-import { type Document } from "mongodb";
-import { hasModuleAccess } from "@/lib/adminAuth";
+import { type Document, type Filter } from "mongodb";
+import { getAdminSession, hasModuleAccess } from "@/lib/adminAuth";
 import { getDb } from "@/lib/mongodb";
 import { getOperationsErrorMessage, hiringProcessSchema } from "@/lib/operationsStore";
-import { getWorkGroupScope, scopedWorkGroupQuery } from "@/lib/workGroupScope";
+import { getWorkGroupScope, scopedWorkGroupQuery, type WorkGroupScope } from "@/lib/workGroupScope";
 import { createId, obtenerEstadoProceso, syncHiringAliases } from "@/lib/hiringProcessUtils";
 import type { AgendaActividad, CronogramaFecha, HiringProcess, HiringProcessFile } from "@/types/admin";
 
 const collection = "hiring_processes";
-const readableModules = ["hiring-processes", "process-calendar", "notifications"];
+const readableModules = ["hiring-processes", "process-calendar", "process-tracking", "notifications"];
+const processUploaderRoles = ["administrator", "general_manager", "general_supervisor", "general_secretary"];
 
 type ParsedHiringProcess = Omit<Partial<HiringProcess>, "cronograma" | "agendaOperacional" | "archivos"> & {
   cronograma?: Partial<CronogramaFecha>[];
@@ -23,11 +24,10 @@ async function canReadProcesses() {
 export async function GET() {
   if (!(await canReadProcesses())) return NextResponse.json({ ok: false, error: "No autorizado." }, { status: 401 });
   try {
-    await ensureDefaultHiringProcess();
     const scope = await getWorkGroupScope();
     if (!scope) return NextResponse.json({ ok: false, error: "No autorizado." }, { status: 401 });
     const db = await getDb();
-    const items = await db.collection<Document>(collection).find(scopedWorkGroupQuery(scope)).sort({ createdAt: -1 }).toArray();
+    const items = await db.collection<Document>(collection).find(scopedHiringProcessQuery(scope)).sort({ createdAt: -1 }).toArray();
     return NextResponse.json({ ok: true, items: items.map(serializeProcess) });
   } catch (error) {
     return NextResponse.json({ ok: false, error: getOperationsErrorMessage(error) }, { status: 500 });
@@ -36,6 +36,10 @@ export async function GET() {
 
 export async function POST(req: NextRequest) {
   if (!(await hasModuleAccess("hiring-processes"))) return NextResponse.json({ ok: false, error: "No autorizado." }, { status: 401 });
+  const session = await getAdminSession();
+  if (!session?.roles.some((role) => processUploaderRoles.includes(role))) {
+    return NextResponse.json({ ok: false, error: "Solo gerencia, administracion, supervision general o secretaria general pueden subir procesos." }, { status: 403 });
+  }
   try {
     const input = normalizeProcess(hiringProcessSchema.parse(await req.json()));
     const db = await getDb();
@@ -57,6 +61,8 @@ export async function POST(req: NextRequest) {
 }
 
 export function normalizeProcess(input: ParsedHiringProcess) {
+  const workGroups = normalizeProcessWorkGroups(input);
+  const primaryGroup = workGroups[0];
   const withIds: HiringProcess = {
     numeroProceso: input.numeroProceso || input.processNumber || "",
     entidadCliente: input.entidadCliente || input.clientName || "",
@@ -69,6 +75,9 @@ export function normalizeProcess(input: ParsedHiringProcess) {
     status: input.status || "planned",
     ...input,
     areaResponsable: input.areaResponsable || input.area || "Sin area",
+    workGroupId: input.workGroupId || primaryGroup?.id || "",
+    workGroupName: input.workGroupName || primaryGroup?.name || "",
+    workGroups,
     cronograma: ((input.cronograma || []) as Partial<CronogramaFecha>[]).map((fecha) => ({
       id: fecha.id || createId(),
       tipoFecha: fecha.tipoFecha || "Otra fecha importante",
@@ -84,6 +93,9 @@ export function normalizeProcess(input: ParsedHiringProcess) {
       fechaHoraInicio: actividad.fechaHoraInicio || "",
       fechaHoraFin: actividad.fechaHoraFin || "",
       responsable: actividad.responsable || "",
+      workGroupId: actividad.workGroupId || "",
+      workGroupName: actividad.workGroupName || "",
+      workGroupLogoUrl: actividad.workGroupLogoUrl || "",
       prioridad: actividad.prioridad || "Media",
       estado: actividad.estado || "Pendiente",
       origen: actividad.origen || "Manual",
@@ -114,12 +126,25 @@ export function serializeProcess(document: Document) {
   return syncHiringAliases(item);
 }
 
+export function scopedHiringProcessQuery(scope: WorkGroupScope): Filter<Document> {
+  if (scope.global) return {};
+
+  const legacy = scopedWorkGroupQuery(scope);
+  const clauses: Filter<Document>[] = [];
+  if ("$or" in legacy && Array.isArray(legacy.$or)) clauses.push(...legacy.$or as Filter<Document>[]);
+  if (scope.workGroupIds.length) clauses.push({ "workGroups.id": { $in: scope.workGroupIds } });
+  if (scope.workGroupNames.length) clauses.push({ "workGroups.name": { $in: scope.workGroupNames } });
+  if (!clauses.length) return { _id: { $exists: false } };
+  return { $or: clauses };
+}
+
 export async function createHiringProcessNotifications(db: Awaited<ReturnType<typeof getDb>>, process: HiringProcess, date = new Date()) {
-  const roles = ["legal_representative", "supervisor", "operations", "administrator"];
+  const roles = ["supervisor", "operations", "general_manager", "general_secretary", "general_supervisor", "administrator"];
   const dueDate = date.toISOString().slice(0, 10);
   const title = "Nuevo proceso de contratacion";
-  const group = process.workGroupName ? ` Grupo responsable: ${process.workGroupName}.` : "";
   const identifier = process._id || process.numeroProceso;
+  const groupNames = getAssignedProcessGroups(process).map((group) => group.name).filter(Boolean).join(", ");
+  const group = groupNames ? ` Empresas asignadas: ${groupNames}.` : "";
   const message = `${identifier} | ${process.numeroProceso} - ${process.entidadCliente}.${group} Revisa cronograma, agenda y seguimiento del proceso.`;
 
   for (const role of roles) {
@@ -139,55 +164,52 @@ export async function createHiringProcessNotifications(db: Awaited<ReturnType<ty
       updatedAt: date,
     });
   }
-}
 
-async function ensureDefaultHiringProcess() {
-  const db = await getDb();
-  await db.collection<Document>(collection).createIndex({ numeroProceso: 1 }, { unique: true });
-  const exists = await db.collection<Document>(collection).findOne({ numeroProceso: "LICO-HG-AM-2025-001" });
-  if (exists) return;
-
-  const now = new Date();
-  const process = normalizeProcess({
-    numeroProceso: "LICO-HG-AM-2025-001",
-    entidadCliente: "HOSPITAL GENERAL - AMBATO",
-    objetoProceso: "CONTRATACION DE LA IMPERMEABILIZACION DE LOSAS Y MANTENIMIENTO DE CUBIERTAS DEL HOSPITAL GENERAL AMBATO HG-AM",
-    tipoCompra: "Obra",
-    presupuestoReferencialSinIva: 46672.73,
-    tipoContratacion: "Licitacion",
-    formaPago: "Anticipo: 20% - Saldo: 80%",
-    tipoAdjudicacion: "Total",
-    plazoEntregaDias: 120,
-    vigenciaOfertaDias: 90,
-    funcionarioEncargado: "efren.guerrero@iess.gob.ec",
-    areaResponsable: "Sin area",
-    estadoProceso: "Desierto",
-    descripcion: "Proceso de contratacion publica para impermeabilizacion de losas y mantenimiento de cubiertas.",
-    notas: "Proceso declarado desierto por inconsistencias entre terminos de referencia y pliego.",
-    fechaInicio: "2025-12-19",
-    fechaVencimiento: "2026-01-19",
-    cronograma: [
-      ["Fecha de publicacion", "2025-12-19 16:30:00", "Indicar la fecha real en la cual se publica el proceso."],
-      ["Fecha limite de preguntas", "2025-12-26 16:30:00", "Fecha maxima para solicitar aclaraciones respecto al proceso de contratacion."],
-      ["Fecha limite de respuestas", "2025-12-30 16:30:00", "Fecha maxima para solventar inquietudes relacionadas al proceso de contratacion."],
-      ["Fecha limite de propuestas", "2026-01-09 10:00:00", "Fecha maxima para la entrega de propuestas."],
-      ["Fecha apertura de ofertas", "2026-01-09 11:00:00", "Fecha para la apertura de sobres/ofertas."],
-      ["Fecha limite solicitar convalidacion", "2026-01-14 16:28:52", "Fecha maxima para que la entidad notifique errores de forma."],
-      ["Fecha limite respuesta convalidacion", "2026-01-16 16:30:00", "Fecha maxima para responder la convalidacion de errores."],
-      ["Fecha estimada de adjudicacion", "2026-01-19 16:30:00", "Fecha estimada para la adjudicacion."],
-    ].map(([tipoFecha, fechaHora, descripcion]) => ({ id: createId(), tipoFecha, fechaHora, descripcion, estado: "Pendiente", observacion: "" })),
-    agendaOperacional: [],
-    archivos: [],
-    startDate: "2025-12-19",
-    dueDate: "2026-01-19",
-    status: "completed",
-  } as HiringProcess);
-
-  const { _id, ...document } = process;
-  void _id;
-  await db.collection<Document>(collection).insertOne({ ...document, createdAt: now, updatedAt: now });
+  for (const assignedGroup of getAssignedProcessGroups(process)) {
+    const representativeMessage = `${identifier} | ${process.numeroProceso} - ${process.entidadCliente}. Empresa: ${assignedGroup.name}. Ya esta disponible para gestionar el avance de elaboracion del proceso.`;
+    const existing = await db.collection("notifications").findOne({
+      title,
+      role: "legal_representative",
+      workGroupId: assignedGroup.id || "",
+      workGroupName: assignedGroup.name,
+      message: { $regex: escapeRegex(identifier) },
+    });
+    if (existing) continue;
+    await db.collection("notifications").insertOne({
+      title,
+      role: "legal_representative",
+      message: representativeMessage,
+      workGroupId: assignedGroup.id || "",
+      workGroupName: assignedGroup.name,
+      dueDate,
+      status: "active",
+      createdAt: date,
+      updatedAt: date,
+    });
+  }
 }
 
 function escapeRegex(value: string) {
   return value.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+}
+
+function normalizeProcessWorkGroups(input: ParsedHiringProcess) {
+  const map = new Map<string, { id?: string; name: string; logoUrl?: string }>();
+  for (const group of input.workGroups || []) {
+    const id = String(group.id || "").trim();
+    const name = String(group.name || "").trim();
+    if (!id && !name) continue;
+    map.set(id || name, { id, name, logoUrl: group.logoUrl || undefined });
+  }
+  if (!map.size && (input.workGroupId || input.workGroupName)) {
+    const id = String(input.workGroupId || "").trim();
+    const name = String(input.workGroupName || "").trim();
+    map.set(id || name, { id, name });
+  }
+  return Array.from(map.values()).map((group) => ({ ...group, name: group.name || "Sin nombre" }));
+}
+
+function getAssignedProcessGroups(process: HiringProcess) {
+  const groups = normalizeProcessWorkGroups(process);
+  return groups.length ? groups : [];
 }

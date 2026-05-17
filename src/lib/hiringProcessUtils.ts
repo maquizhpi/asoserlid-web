@@ -86,22 +86,28 @@ export function obtenerEstadoActividad(actividad: AgendaActividad): AgendaActivi
 export function generarAgendaAutomatica(proceso: HiringProcess): AgendaActividad[] {
   const existing = proceso.agendaOperacional || [];
   const manual = existing.filter((actividad) => actividad.origen === "Manual");
+  const groups = getProcessGroups(proceso);
   const automatic = (proceso.cronograma || []).flatMap((fecha) => {
     const titles = agendaTemplates[fecha.tipoFecha] || [`Dar seguimiento a ${fecha.tipoFecha.toLowerCase()}`];
-    return titles.map((titulo) => ({
-      id: createId(),
-      titulo,
-      descripcion: fecha.descripcion || `Seguimiento operativo: ${fecha.tipoFecha}`,
-      fechaHoraInicio: fecha.fechaHora,
-      fechaHoraFin: fecha.fechaHora,
-      responsable: proceso.funcionarioEncargado || "",
-      prioridad: titulo.includes("propuesta") || titulo.includes("convalidacion") ? "Alta" : "Media",
-      estado: "Pendiente",
-      origen: "Automatico",
-      procesoRelacionado: fecha.tipoFecha,
-      observaciones: "",
-      fechaCumplimiento: "",
-    } satisfies AgendaActividad));
+    return groups.flatMap((group) =>
+      titles.map((titulo) => ({
+        id: createId(),
+        titulo,
+        descripcion: fecha.descripcion || `Seguimiento operativo: ${fecha.tipoFecha}`,
+        fechaHoraInicio: fecha.fechaHora,
+        fechaHoraFin: fecha.fechaHora,
+        responsable: proceso.funcionarioEncargado || "",
+        workGroupId: group.id || "",
+        workGroupName: group.name || "",
+        workGroupLogoUrl: group.logoUrl || "",
+        prioridad: titulo.includes("propuesta") || titulo.includes("convalidacion") ? "Alta" : "Media",
+        estado: "Pendiente",
+        origen: "Automatico",
+        procesoRelacionado: fecha.tipoFecha,
+        observaciones: "",
+        fechaCumplimiento: "",
+      } satisfies AgendaActividad))
+    );
   });
 
   return [...manual, ...automatic].sort((a, b) => compareDateTime(a.fechaHoraInicio, b.fechaHoraInicio));
@@ -216,4 +222,10 @@ function legacyStatusToProcessStatus(status?: HiringProcess["status"]): HiringPr
   if (status === "cancelled") return "Cancelado";
   if (status === "in_progress" || status === "paused") return "En seguimiento";
   return undefined;
+}
+
+function getProcessGroups(process: HiringProcess) {
+  if (process.workGroups?.length) return process.workGroups.filter((group) => group.id || group.name);
+  if (process.workGroupId || process.workGroupName) return [{ id: process.workGroupId || "", name: process.workGroupName || "", logoUrl: "" }];
+  return [{ id: "", name: "", logoUrl: "" }];
 }

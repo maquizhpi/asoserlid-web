@@ -10,6 +10,7 @@ export type CrudField<T extends Record<string, unknown>> = {
   type?: "text" | "email" | "date" | "textarea" | "select" | "image";
   required?: boolean;
   options?: { value: string; label: string }[];
+  mapValueToPatch?: (value: string, current: T) => Partial<T>;
   uploadFolder?: string;
   accept?: string;
 };
@@ -80,8 +81,8 @@ export default function SimpleCrudModule<T extends Record<string, unknown>>({
   }, [loadItems]);
 
   useEffect(() => {
-    setForm(selectedItem || emptyItem);
-  }, [selectedItem, emptyItem]);
+    setForm(selectedItem ? { ...emptyItem, ...selectedItem } : emptyItem);
+  }, [selectedId, selectedItem, emptyItem]);
 
   async function saveItem(e: FormEvent) {
     e.preventDefault();
@@ -126,7 +127,8 @@ export default function SimpleCrudModule<T extends Record<string, unknown>>({
   }
 
   function updateField(key: keyof T & string, value: string) {
-    setForm((current) => ({ ...current, [key]: value }));
+    const field = fields.find((item) => item.key === key);
+    setForm((current) => ({ ...current, [key]: value, ...(field?.mapValueToPatch?.(value, current) || {}) }));
   }
 
   async function uploadImage(field: CrudField<T>, file: File) {

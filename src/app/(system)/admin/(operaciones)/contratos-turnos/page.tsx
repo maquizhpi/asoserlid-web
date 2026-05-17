@@ -20,6 +20,11 @@ import type {
   WorkGroup,
 } from "@/types/admin";
 
+type SessionUser = {
+  roles: string[];
+  workGroups?: { id: string; name: string }[];
+};
+
 const days = [
   { value: "monday", label: "Lunes" },
   { value: "tuesday", label: "Martes" },
@@ -50,8 +55,15 @@ const emptyContract: ServiceContract = {
   workplaces: [],
 };
 
-function createEmptyContract(): ServiceContract {
-  return { ...emptyContract, startDate: new Date().toISOString().slice(0, 10), workplaces: [], assignedStaffIds: [] };
+function createEmptyContract(workGroup?: SelectOption | null): ServiceContract {
+  return {
+    ...emptyContract,
+    startDate: new Date().toISOString().slice(0, 10),
+    workGroupId: workGroup?.value || "",
+    workGroupName: workGroup?.label || "",
+    workplaces: [],
+    assignedStaffIds: [],
+  };
 }
 
 type ModalState =
@@ -72,6 +84,7 @@ export default function ContractsShiftsPage() {
   const [kits, setKits] = useState<SupplyKit[]>([]);
   const [products, setProducts] = useState<SupplyProduct[]>([]);
   const [workers, setWorkers] = useState<Worker[]>([]);
+  const [sessionUser, setSessionUser] = useState<SessionUser | null>(null);
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const [form, setForm] = useState<ServiceContract>(createEmptyContract);
   const [isCreatingNew, setIsCreatingNew] = useState(false);
@@ -97,15 +110,15 @@ export default function ContractsShiftsPage() {
   }, []);
 
   useEffect(() => {
-    if (!isCreatingNew) setForm(selectedContract ? normalizeContract(selectedContract) : createEmptyContract());
-  }, [isCreatingNew, selectedContract]);
+    if (!isCreatingNew) setForm(selectedContract ? normalizeContract(selectedContract) : createEmptyContract(getDefaultWorkGroup(sessionUser, groups)));
+  }, [groups, isCreatingNew, selectedContract, sessionUser]);
 
   useEffect(() => {
     if (!isCreatingNew && !selectedContract && contracts[0]?._id) setSelectedId(contracts[0]._id);
   }, [contracts, isCreatingNew, selectedContract]);
 
   async function loadData() {
-    const [contractsRes, clientsRes, serviceTypesRes, groupsRes, workersRes, supervisorsRes, kitsRes, productsRes] = await Promise.all([
+    const [contractsRes, clientsRes, serviceTypesRes, groupsRes, workersRes, supervisorsRes, kitsRes, productsRes, meRes] = await Promise.all([
       fetch("/api/admin/contracts", { cache: "no-store" }),
       fetch("/api/admin/clients", { cache: "no-store" }),
       fetch("/api/admin/service-types", { cache: "no-store" }),
@@ -114,6 +127,7 @@ export default function ContractsShiftsPage() {
       fetch("/api/admin/supervisors", { cache: "no-store" }),
       fetch("/api/admin/supply-kits", { cache: "no-store" }),
       fetch("/api/admin/supply-products", { cache: "no-store" }),
+      fetch("/api/admin/me", { cache: "no-store" }),
     ]);
     const contractsData = await contractsRes.json().catch(() => ({}));
     const clientsData = await clientsRes.json().catch(() => ({}));
@@ -123,6 +137,9 @@ export default function ContractsShiftsPage() {
     const supervisorsData = await supervisorsRes.json().catch(() => ({}));
     const kitsData = await kitsRes.json().catch(() => ({}));
     const productsData = await productsRes.json().catch(() => ({}));
+    const meData = await meRes.json().catch(() => ({}));
+    const currentUser = meData.user || null;
+    const scopedGroups = (currentUser?.workGroups || []).map((group: { id: string; name: string }) => ({ value: group.id, label: group.name }));
 
     if (contractsRes.ok) setContracts((contractsData.items || []).map(normalizeContract));
     if (clientsRes.ok) setClients(((clientsData.items || []) as Client[]).map((client) => ({ value: client._id || "", label: client.name })));
@@ -133,19 +150,25 @@ export default function ContractsShiftsPage() {
           .map((item) => ({ value: item.name, label: item.name }))
       );
     }
-    if (groupsRes.ok) setGroups(((groupsData.items || []) as WorkGroup[]).map((group) => ({ value: group._id || "", label: group.name })));
+    setSessionUser(currentUser);
+    if (groupsRes.ok) {
+      const loadedGroups = ((groupsData.items || []) as WorkGroup[]).map((group) => ({ value: group._id || "", label: group.commercialName || group.name }));
+      setGroups(loadedGroups.length ? loadedGroups : scopedGroups);
+    } else {
+      setGroups(scopedGroups);
+    }
     if (workersRes.ok) setWorkers(workersData.items || []);
     if (supervisorsRes.ok) setSupervisors((supervisorsData.items || []).map((item: { id: string; name: string }) => ({ value: item.id, label: item.name })));
     if (kitsRes.ok) setKits(kitsData.items || []);
     if (productsRes.ok) setProducts(productsData.items || []);
-    if (!contractsRes.ok || !clientsRes.ok || !serviceTypesRes.ok || !groupsRes.ok || !workersRes.ok || !supervisorsRes.ok || !kitsRes.ok || !productsRes.ok) {
+    if (!contractsRes.ok || !clientsRes.ok || !serviceTypesRes.ok || !workersRes.ok || !supervisorsRes.ok || !kitsRes.ok || !productsRes.ok) {
       showStatus(contractsData.error || clientsData.error || serviceTypesData.error || groupsData.error || workersData.error || supervisorsData.error || kitsData.error || productsData.error || "No se pudo cargar contratos.", "error");
     }
   }
 
   async function startNewContract() {
     if (!(await confirmLeaveChanges())) return;
-    setModal({ type: "contract", contract: createEmptyContract() });
+    setModal({ type: "contract", contract: createEmptyContract(getDefaultWorkGroup(sessionUser, groups)) });
   }
 
   async function selectContract(contractId: string) {
@@ -172,7 +195,12 @@ export default function ContractsShiftsPage() {
     e?.preventDefault();
     showStatus("Guardando contrato...", "info");
 
-    const payload = buildContractPayload(nextForm);
+    const defaultWorkGroup = getDefaultWorkGroup(sessionUser, groups);
+    const payload = buildContractPayload({
+      ...nextForm,
+      workGroupId: nextForm.workGroupId || defaultWorkGroup?.value || "",
+      workGroupName: nextForm.workGroupName || defaultWorkGroup?.label || "",
+    });
     const isNew = !payload._id;
     const res = await fetch(isNew ? "/api/admin/contracts" : `/api/admin/contracts/${payload._id}`, {
       method: isNew ? "POST" : "PUT",
@@ -452,6 +480,7 @@ export default function ContractsShiftsPage() {
           clients={clients}
           serviceTypes={serviceTypes}
           groups={groups}
+          canChooseGroup={canChooseGroup(sessionUser)}
           onClose={() => setModal(null)}
           onSave={(contract) => saveContract(undefined, contract)}
         />
@@ -531,6 +560,7 @@ function ContractModal({
   clients,
   serviceTypes,
   groups,
+  canChooseGroup,
   onSave,
   onClose,
 }: {
@@ -538,16 +568,24 @@ function ContractModal({
   clients: SelectOption[];
   serviceTypes: SelectOption[];
   groups: SelectOption[];
+  canChooseGroup: boolean;
   onSave: (contract: ServiceContract) => void;
   onClose: () => void;
 }) {
   const [form, setForm] = useState<ServiceContract>(normalizeContract(contract));
+  const selectedGroup = groups.find((group) => group.value === form.workGroupId) || (form.workGroupId ? { value: form.workGroupId, label: form.workGroupName || form.workGroupId } : null);
   return (
     <Modal title={form._id ? "Editar contrato" : "Nuevo contrato"} onClose={onClose} onSubmit={() => onSave(form)}>
       <Field label="Numero de contrato"><input className={inputClass} value={form.contractNumber || ""} onChange={(e) => setForm({ ...form, contractNumber: e.target.value })} /></Field>
       <SearchableSelect label="Cliente" value={form.clientId || ""} options={clients} placeholder="Buscar cliente..." onChange={(option) => setForm({ ...form, clientId: option?.value || "", clientName: option?.label || "" })} />
       <SearchableSelect label="Tipo de servicio" value={form.serviceType || ""} options={serviceTypes} placeholder="Buscar servicio..." onChange={(option) => setForm({ ...form, serviceType: option?.label || "" })} />
-      <SearchableSelect label="Grupo de trabajo" value={form.workGroupId || ""} options={groups} placeholder="Buscar grupo..." onChange={(option) => setForm({ ...form, workGroupId: option?.value || "", workGroupName: option?.label || "" })} />
+      {canChooseGroup ? (
+        <SearchableSelect label="Grupo de trabajo" value={form.workGroupId || ""} options={groups} placeholder="Buscar grupo..." onChange={(option) => setForm({ ...form, workGroupId: option?.value || "", workGroupName: option?.label || "" })} />
+      ) : (
+        <Field label="Grupo de trabajo">
+          <input className={inputClass} value={selectedGroup?.label || form.workGroupName || "Empresa del usuario"} readOnly />
+        </Field>
+      )}
       <Field label="Administrador de contrato"><input className={inputClass} value={form.contractAdministrator || ""} onChange={(e) => setForm({ ...form, contractAdministrator: e.target.value })} /></Field>
       <Field label="Correo del administrador"><input type="email" className={inputClass} value={form.contractAdministratorEmail || ""} onChange={(e) => setForm({ ...form, contractAdministratorEmail: e.target.value })} /></Field>
       <Field label="Telefono del administrador"><input className={inputClass} value={form.contractAdministratorPhone || ""} onChange={(e) => setForm({ ...form, contractAdministratorPhone: e.target.value })} /></Field>
@@ -1124,6 +1162,17 @@ function buildContractPayload(contract: ServiceContract): ServiceContract {
     assignedStaffIds: assignedStaff.map((staff) => staff.workerId),
     assignedStaff: assignedStaff.map((staff) => `${staff.firstName} ${staff.lastName}`.trim()).join(", "),
   };
+}
+
+function canChooseGroup(user: SessionUser | null) {
+  return Boolean(user?.roles.some((role) => ["administrator", "general_manager", "general_accountant", "general_secretary", "general_supervisor", "accounting"].includes(role)));
+}
+
+function getDefaultWorkGroup(user: SessionUser | null, groups: SelectOption[]) {
+  if (canChooseGroup(user)) return null;
+  const userGroup = user?.workGroups?.[0];
+  if (userGroup) return { value: userGroup.id, label: userGroup.name };
+  return groups.length === 1 ? groups[0] : null;
 }
 
 function hasUnsavedChanges(form: ServiceContract, selectedContract: ServiceContract | undefined, isCreatingNew: boolean) {

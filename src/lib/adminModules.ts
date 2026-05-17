@@ -300,6 +300,16 @@ export const adminModules: AdminModule[] = [
     group: "reports",
   },
   {
+    key: "process-tracking",
+    title: "Seguimiento de procesos",
+    href: "/admin/seguimiento-procesos",
+    description: "Metricas de avance por proceso y empresa participante.",
+    collection: "hiring_processes",
+    status: "ready",
+    required: true,
+    group: "reports",
+  },
+  {
     key: "notifications",
     title: "Notificaciones",
     href: "/admin/notificaciones",

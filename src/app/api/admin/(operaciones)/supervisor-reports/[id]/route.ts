@@ -13,7 +13,7 @@ const editableReportModules = ["supervisor-daily-report", "report-approvals"];
 async function canEditReports() {
   const session = await getAdminSession();
   if (!session) return false;
-  if (session.roles.some((role) => ["administrator", "supervisor", "operations"].includes(role))) return true;
+  if (session.roles.some((role) => ["administrator", "general_manager", "general_supervisor", "supervisor", "operations"].includes(role))) return true;
   return (await Promise.all(editableReportModules.map((module) => hasModuleAccess(module)))).some(Boolean);
 }
 
@@ -52,7 +52,7 @@ export async function PUT(req: NextRequest, context: RouteContext) {
 export async function DELETE(_req: NextRequest, context: RouteContext) {
   if (!(await hasModuleAccess("supervisor-daily-report"))) return NextResponse.json({ ok: false, error: "No autorizado." }, { status: 401 });
   const session = await getAdminSession();
-  if (!session?.roles.some((role) => ["administrator", "supervisor", "operations"].includes(role))) {
+  if (!session?.roles.some((role) => ["administrator", "general_manager", "general_supervisor", "supervisor", "operations"].includes(role))) {
     return NextResponse.json({ ok: false, error: "Tu rol puede revisar la informacion, pero no eliminar asistencia." }, { status: 403 });
   }
   try {

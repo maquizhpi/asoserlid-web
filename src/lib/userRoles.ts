@@ -2,6 +2,10 @@ import type { UserRole } from "@/types/admin";
 
 export const userRoles = [
   "administrator",
+  "general_manager",
+  "general_accountant",
+  "general_secretary",
+  "general_supervisor",
   "supervisor",
   "operations",
   "human_resources",
@@ -14,6 +18,10 @@ export const userRoles = [
 
 export const roleLabels: Record<UserRole, string> = {
   administrator: "Administrador",
+  general_manager: "Gerente general",
+  general_accountant: "Contadora general",
+  general_secretary: "Secretaria general",
+  general_supervisor: "Supervisor general",
   supervisor: "Supervisor",
   operations: "Operaciones",
   human_resources: "RR. HH.",

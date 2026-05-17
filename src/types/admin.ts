@@ -2,6 +2,10 @@ export type MachineStatus = "available" | "assigned" | "maintenance" | "inactive
 export type MachineEnvironment = "hospitals" | "public_institutions" | "homes" | "workshops" | "companies" | "other";
 export type UserRole =
   | "administrator"
+  | "general_manager"
+  | "general_accountant"
+  | "general_secretary"
+  | "general_supervisor"
   | "supervisor"
   | "operations"
   | "human_resources"
@@ -92,8 +96,8 @@ export type ServiceType = {
   _id?: string;
   code: string;
   name: string;
-  detail: string;
-  activities: string;
+  detail?: string;
+  activities?: string;
   imageUrl?: string;
   imagePublicId?: string;
   regularPrice?: number;
@@ -354,6 +358,8 @@ export type Client = {
   address: string;
   contactName: string;
   contactPhone: string;
+  workGroupId?: string;
+  workGroupName?: string;
   status: "active" | "inactive";
   createdAt?: string;
   updatedAt?: string;
@@ -566,6 +572,8 @@ export type SupplyProduct = {
   auxiliaryCode?: string;
   name: string;
   category: string;
+  workGroupId?: string;
+  workGroupName?: string;
   brand?: string;
   unit: string;
   unitsPerBox?: number;
@@ -621,6 +629,9 @@ export type AgendaActividad = {
   fechaHoraInicio: string;
   fechaHoraFin?: string;
   responsable?: string;
+  workGroupId?: string;
+  workGroupName?: string;
+  workGroupLogoUrl?: string;
   prioridad: "Alta" | "Media" | "Baja";
   estado: "Pendiente" | "En proceso" | "Cumplido" | "Vencido" | "Reprogramado";
   origen: "Automatico" | "Manual";
@@ -636,6 +647,12 @@ export type HiringProcessFile = {
   tipo?: string;
   observacion?: string;
   createdAt?: string;
+};
+
+export type HiringProcessWorkGroup = {
+  id?: string;
+  name: string;
+  logoUrl?: string;
 };
 
 export type HiringProcess = {
@@ -654,6 +671,7 @@ export type HiringProcess = {
     areaResponsable: string;
     workGroupId?: string;
     workGroupName?: string;
+    workGroups?: HiringProcessWorkGroup[];
     processOwner?: string;
     estadoProceso: HiringProcessStatus;
     winningCompany?: string;
@@ -683,6 +701,8 @@ export type InternalNotification = {
   title: string;
   role: UserRole | "all";
   message: string;
+  workGroupId?: string;
+  workGroupName?: string;
   dueDate?: string;
   status: "active" | "read" | "archived";
   acknowledgedBy?: string[];

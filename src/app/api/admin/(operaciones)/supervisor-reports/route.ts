@@ -27,7 +27,7 @@ export async function GET() {
 export async function POST(req: NextRequest) {
   if (!(await hasModuleAccess("supervisor-daily-report"))) return NextResponse.json({ ok: false, error: "No autorizado." }, { status: 401 });
   const session = await getAdminSession();
-  if (!session?.roles.some((role) => ["administrator", "supervisor", "operations"].includes(role))) {
+  if (!session?.roles.some((role) => ["administrator", "general_manager", "general_supervisor", "supervisor", "operations"].includes(role))) {
     return NextResponse.json({ ok: false, error: "Tu rol puede revisar la informacion, pero no enviar asistencia." }, { status: 403 });
   }
   try {
@@ -52,7 +52,7 @@ export async function POST(req: NextRequest) {
 }
 
 export async function createSupervisorReportNotifications(db: Awaited<ReturnType<typeof getDb>>, report: SupervisorReport) {
-  const roles: Array<UserRole | "all"> = ["administrator", "operations", "supervisor"];
+  const roles: Array<UserRole | "all"> = ["administrator", "general_manager", "general_supervisor", "operations", "supervisor"];
   const title = "Reporte diario enviado";
   const message = [
     `${report.supervisor || "Supervisor"} envio un reporte diario para revision.`,

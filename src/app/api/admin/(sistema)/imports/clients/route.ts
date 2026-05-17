@@ -12,7 +12,7 @@ export async function GET() {
 }
 
 export async function POST(req: NextRequest) {
-  if (!(await hasAnyRole(["administrator", "human_resources"]))) {
+  if (!(await hasAnyRole(["administrator", "general_manager", "general_secretary", "human_resources"]))) {
     return NextResponse.json({ ok: false, error: "Solo administrador o RR. HH. pueden importar datos." }, { status: 401 });
   }
 

@@ -80,15 +80,6 @@ export async function validateUserCredentials(emailInput: string, password: stri
     );
   }
 
-  const effectiveAccess = getEffectiveModuleAccess(user.roles, user.moduleAccess);
-  if (user._id && !sameStringSet(effectiveAccess, user.moduleAccess)) {
-    await db.collection<UserDocument>(usersCollection).updateOne(
-      { _id: user._id },
-      { $set: { moduleAccess: effectiveAccess, updatedAt: new Date() } }
-    );
-    user.moduleAccess = effectiveAccess;
-  }
-
   return serializeUser(user);
 }
 
@@ -259,12 +250,6 @@ function serializeUser(user: UserDocument): AdminUser {
     createdAt: user.createdAt.toISOString(),
     updatedAt: user.updatedAt.toISOString(),
   };
-}
-
-function sameStringSet(left: string[], right: string[] = []) {
-  if (left.length !== right.length) return false;
-  const rightSet = new Set(right);
-  return left.every((item) => rightSet.has(item));
 }
 
 function isDuplicateKey(error: unknown) {

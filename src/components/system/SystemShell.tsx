@@ -7,6 +7,7 @@ import AssessmentIcon from "@mui/icons-material/Assessment";
 import AccountCircleIcon from "@mui/icons-material/AccountCircle";
 import AssignmentTurnedInIcon from "@mui/icons-material/AssignmentTurnedIn";
 import BadgeIcon from "@mui/icons-material/Badge";
+import BarChartIcon from "@mui/icons-material/BarChart";
 import BusinessIcon from "@mui/icons-material/Business";
 import CalculateIcon from "@mui/icons-material/Calculate";
 import CategoryIcon from "@mui/icons-material/Category";
@@ -49,6 +50,9 @@ type ShellUser = {
   email: string;
   roles: UserRole[];
   moduleAccess: string[];
+  primaryWorkGroupName?: string;
+  primaryWorkGroupLogo?: string;
+  workGroups?: { id: string; name: string; logoUrl?: string }[];
 };
 
 type ShellProfile = {
@@ -118,6 +122,7 @@ const moduleIcons: Record<string, typeof DashboardIcon> = {
   "supply-control": ListAltIcon,
   "hiring-processes": FactCheckIcon,
   "process-calendar": EventIcon,
+  "process-tracking": BarChartIcon,
   notifications: NotificationsIcon,
   "report-approvals": FactCheckIcon,
   exports: AssessmentIcon,
@@ -187,6 +192,7 @@ const sidebarConfig: SidebarSection[] = [
     items: [
       { key: "hiring-processes", title: "Procesos de contratación", moduleKey: "hiring-processes" },
       { key: "process-calendar", title: "Calendario de procesos", moduleKey: "process-calendar" },
+      { key: "process-tracking", title: "Seguimiento de procesos", moduleKey: "process-tracking" },
     ],
   },
   {
@@ -333,7 +339,9 @@ export default function SystemShell({ title, subtitle, activeKey, children }: Sy
       .then((response) => (response.ok ? response.json() : null))
       .then((data) => {
         if (!mounted) return;
-        const visible = ((data?.items || []) as InternalNotification[]).filter((item) => isNotificationVisibleForUser(item, sessionUser));
+        const visible = dedupeNotificationsForUser(
+          ((data?.items || []) as InternalNotification[]).filter((item) => isNotificationVisibleForUser(item, sessionUser))
+        );
         setNotifications(visible);
 
         const active = visible.filter((item) => item.status === "active");
@@ -454,6 +462,22 @@ export default function SystemShell({ title, subtitle, activeKey, children }: Sy
 
           {sessionUser && (
             <div className="border-b border-white/10 px-5 py-4">
+              {sessionUser.primaryWorkGroupName && (
+                <div className="mb-3 flex items-center gap-3 rounded-md border border-cyan-300/25 bg-cyan-300/10 px-3 py-2">
+                  {sessionUser.primaryWorkGroupLogo ? (
+                    // eslint-disable-next-line @next/next/no-img-element
+                    <img src={sessionUser.primaryWorkGroupLogo} alt="" className="h-10 w-10 shrink-0 rounded-md border border-white/15 bg-white object-contain p-1" />
+                  ) : (
+                    <span className="grid h-10 w-10 shrink-0 place-items-center rounded-md bg-cyan-300/20 text-sm font-black text-cyan-50">
+                      {sessionUser.primaryWorkGroupName.slice(0, 2).toUpperCase()}
+                    </span>
+                  )}
+                  <div className="min-w-0">
+                    <p className="text-[10px] font-semibold uppercase tracking-[0.16em] text-cyan-100/75">Empresa</p>
+                    <p className="mt-1 truncate text-sm font-bold text-white">{sessionUser.primaryWorkGroupName}</p>
+                  </div>
+                </div>
+              )}
               <p className="text-[11px] font-semibold uppercase tracking-[0.16em] text-cyan-100/75">Usuario conectado</p>
               <p className="mt-1 truncate text-sm font-bold text-white">{sessionUser.name}</p>
               <p className="mt-0.5 truncate text-xs text-cyan-100/80">{sessionUser.email}</p>
@@ -568,17 +592,24 @@ export default function SystemShell({ title, subtitle, activeKey, children }: Sy
 
   async function acknowledgeNotification(notification: InternalNotification) {
     if (!sessionUser || !notification._id) return;
-    const acknowledgedBy = Array.from(new Set([...(notification.acknowledgedBy || []), sessionUser.email]));
-    const nextNotification = { ...notification, acknowledgedBy };
-    setNotifications((current) => current.filter((item) => item._id !== notification._id));
+    const related = notifications.filter((item) => notificationIdentity(item) === notificationIdentity(notification));
+    const original = notifications;
+    setNotifications((current) => current.filter((item) => notificationIdentity(item) !== notificationIdentity(notification)));
 
-    const res = await fetch(`/api/admin/notifications/${notification._id}`, {
-      method: "PUT",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify(nextNotification),
-    });
-    if (!res.ok) {
-      setNotifications((current) => [notification, ...current]);
+    const results = await Promise.all(
+      related
+        .filter((item) => item._id)
+        .map((item) => {
+          const acknowledgedBy = Array.from(new Set([...(item.acknowledgedBy || []), sessionUser.email]));
+          return fetch(`/api/admin/notifications/${item._id}`, {
+            method: "PUT",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ ...item, acknowledgedBy }),
+          });
+        })
+    );
+    if (results.some((res) => !res.ok)) {
+      setNotifications(original);
       notifySystem("No se pudo marcar la notificacion como conocida.", { tone: "error", title: "Notificacion" });
     }
   }
@@ -864,8 +895,56 @@ function canUserAccessModule(user: ShellUser, moduleKey: string) {
 
 function isNotificationVisibleForUser(notification: InternalNotification, user: ShellUser) {
   if ((notification.acknowledgedBy || []).includes(user.email)) return false;
-  if (notification.role === "all") return true;
-  return user.roles.includes(notification.role);
+  const roleMatches = notification.role === "all" || user.roles.includes(notification.role);
+  if (!roleMatches) return false;
+  if (!notification.workGroupId && !notification.workGroupName) return true;
+  if (user.roles.includes("administrator")) return true;
+  const userGroups = user.workGroups || [];
+  return userGroups.some((group) =>
+    (notification.workGroupId && group.id === notification.workGroupId)
+    || (notification.workGroupName && group.name === notification.workGroupName)
+  );
+}
+
+function dedupeNotificationsForUser(notifications: InternalNotification[]) {
+  const map = new Map<string, InternalNotification>();
+  for (const notification of notifications) {
+    const key = notificationIdentity(notification);
+    const existing = map.get(key);
+    if (!existing) {
+      map.set(key, notification);
+      continue;
+    }
+    map.set(key, mergeNotifications(existing, notification));
+  }
+  return Array.from(map.values());
+}
+
+function mergeNotifications(a: InternalNotification, b: InternalNotification): InternalNotification {
+  const acknowledgedBy = Array.from(new Set([...(a.acknowledgedBy || []), ...(b.acknowledgedBy || [])]));
+  const createdAt = [a.createdAt, b.createdAt].filter(Boolean).sort()[0] || a.createdAt || b.createdAt;
+  const status = a.status === "active" || b.status === "active" ? "active" : a.status;
+  return {
+    ...a,
+    role: a.role === b.role ? a.role : "all",
+    status,
+    createdAt,
+    acknowledgedBy,
+  };
+}
+
+function notificationIdentity(notification: InternalNotification) {
+  return [
+    normalizeNotificationText(notification.title),
+    normalizeNotificationText(notification.message),
+    notification.workGroupId || "",
+    normalizeNotificationText(notification.workGroupName || ""),
+    notification.dueDate || "",
+  ].join("|");
+}
+
+function normalizeNotificationText(value: string) {
+  return value.replace(/\s+/g, " ").trim().toLowerCase();
 }
 
 function notificationStatusLabel(status: InternalNotification["status"]) {

@@ -178,11 +178,11 @@ function CalendarEventChip({ event }: { event: CalendarEvent }) {
   return (
     <Link
       href="/admin/procesos-contratacion"
-      title={`${event.title} - ${event.processNumber}`}
+      title={`${event.entity} | ${event.processNumber} - ${event.title}`}
       className={`block rounded px-2 py-1 text-xs font-semibold leading-tight ${eventChipTone(event)}`}
     >
-      <span className="mr-1 font-bold">{event.time?.slice(0, 5) || "--:--"}</span>
-      <span className="align-middle">{event.title}</span>
+      <span className="block truncate font-bold">{event.time?.slice(0, 5) || "--:--"} {event.entity}</span>
+      <span className="mt-0.5 block line-clamp-2">{event.title}</span>
     </Link>
   );
 }

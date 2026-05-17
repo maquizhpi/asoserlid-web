@@ -34,6 +34,7 @@ const protectedRoutes: Record<string, string[]> = {
   "/admin/control-insumos": ["supply-control"],
   "/admin/procesos-contratacion": ["hiring-processes"],
   "/admin/calendario-procesos": ["process-calendar"],
+  "/admin/seguimiento-procesos": ["process-tracking"],
   "/admin/notificaciones": ["notifications"],
   "/admin/blog": ["blog"],
   "/admin/auditorias": ["audits"],

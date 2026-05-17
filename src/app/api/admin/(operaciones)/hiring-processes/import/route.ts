@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import ExcelJS from "exceljs";
 import { type Document } from "mongodb";
-import { hasModuleAccess } from "@/lib/adminAuth";
+import { getAdminSession, hasModuleAccess } from "@/lib/adminAuth";
 import { getDb } from "@/lib/mongodb";
 import { getOperationsErrorMessage, hiringProcessSchema } from "@/lib/operationsStore";
 import { syncHiringAliases } from "@/lib/hiringProcessUtils";
@@ -9,6 +9,7 @@ import { createHiringProcessNotifications, normalizeProcess, serializeProcess } 
 import type { HiringProcess, HiringProcessStatus } from "@/types/admin";
 
 const statuses: HiringProcessStatus[] = ["Planificado", "En seguimiento", "Por vencer", "Vencido", "Adjudicado", "Desierto", "Cancelado", "Finalizado"];
+const processUploaderRoles = ["administrator", "general_manager", "general_supervisor", "general_secretary"];
 
 export async function GET() {
   if (!(await hasModuleAccess("hiring-processes"))) return NextResponse.json({ ok: false, error: "No autorizado." }, { status: 401 });
@@ -40,6 +41,10 @@ export async function GET() {
 
 export async function POST(req: NextRequest) {
   if (!(await hasModuleAccess("hiring-processes"))) return NextResponse.json({ ok: false, error: "No autorizado." }, { status: 401 });
+  const session = await getAdminSession();
+  if (!session?.roles.some((role) => processUploaderRoles.includes(role))) {
+    return NextResponse.json({ ok: false, error: "Solo gerencia, administracion, supervision general o secretaria general pueden importar procesos." }, { status: 403 });
+  }
   try {
     const data = await req.formData();
     const file = data.get("file");

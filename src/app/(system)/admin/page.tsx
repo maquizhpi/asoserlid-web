@@ -44,7 +44,6 @@ export default function AdminPage() {
   const [authenticated, setAuthenticated] = useState(false);
   const [loading, setLoading] = useState(true);
   const [login, setLogin] = useState({ email: "", password: "" });
-  const [modules, setModules] = useState<AdminOverviewItem[]>([]);
   const [sessionUser, setSessionUser] = useState<SessionUser | null>(null);
   const [dashboardStats, setDashboardStats] = useState<DashboardStats | null>(null);
   const [status, setStatus] = useState<string | null>(null);
@@ -137,7 +136,6 @@ export default function AdminPage() {
     }
 
     const visibleModules = data.modules || [];
-    setModules(visibleModules);
     setSessionUser(meData.user || null);
     setAuthenticated(true);
     if (meData.user) await loadDashboardStats(meData.user, visibleModules);
@@ -321,10 +319,6 @@ export default function AdminPage() {
         </section>
       )}
 
-      <DashboardGroup title="Contenido y auditoria" modules={modules.filter((module) => ["blog", "gallery", "certifications", "backups", "audits"].includes(module.key))} />
-      <DashboardGroup title="Configuraciones" modules={modules.filter((module) => ["roles", "users", "work-groups", "catalogs", "service-types"].includes(module.key))} />
-      <DashboardGroup title="Operacion" modules={modules.filter((module) => ["workers", "worker-intake", "clients", "contracts-shifts", "supervisor-daily-report", "supply-control", "hiring-processes", "accounting", "payment-calculation"].includes(module.key))} />
-      <DashboardGroup title="Recursos y reportes" modules={modules.filter((module) => ["machines", "worker-documents", "supply-products", "supply-kits", "dashboard-supervisor", "dashboard-accounting", "labor-history", "process-calendar", "notifications", "report-approvals", "exports"].includes(module.key))} />
     </SystemShell>
   );
 }
@@ -354,38 +348,6 @@ function daysUntil(date: string, today: string) {
 
 const inputClass =
   "w-full rounded-md border border-slate-300 bg-white px-4 py-3 text-slate-900 outline-none transition placeholder:text-slate-400 focus:border-[#218F93] focus:ring-4 focus:ring-[#33C3C9]/15";
-
-function DashboardGroup({ title, modules }: { title: string; modules: AdminOverviewItem[] }) {
-  if (!modules.length) return null;
-
-  return (
-    <section className="mb-6">
-      <h2 className="mb-3 text-sm font-bold uppercase tracking-[0.14em] text-slate-500">{title}</h2>
-      <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-3">
-        {modules.map((module) => (
-          <article
-            key={module.key}
-            className="flex min-h-40 flex-col justify-between rounded-lg border border-slate-200 bg-white p-4 shadow-sm transition hover:border-[#33C3C9] hover:bg-[#F7FEFF]"
-          >
-            <div className="flex items-start justify-between gap-3">
-              <h3 className="font-bold text-[#173C61]">{module.title}</h3>
-              <span className="rounded-full bg-[#E6F8F9] px-2 py-1 text-xs font-semibold text-[#173C61]">
-                Asignado
-              </span>
-            </div>
-            <p className="mt-2 text-sm leading-6 text-slate-600">{module.description}</p>
-            <Link
-              href={module.href}
-              className="mt-4 inline-flex w-full items-center justify-center rounded-md bg-[#173C61] px-4 py-2.5 text-sm font-bold text-white transition hover:bg-[#218F93]"
-            >
-              Abrir {module.title}
-            </Link>
-          </article>
-        ))}
-      </div>
-    </section>
-  );
-}
 
 async function fetchJsonIf(allowed: boolean, url: string) {
   if (!allowed) return {};

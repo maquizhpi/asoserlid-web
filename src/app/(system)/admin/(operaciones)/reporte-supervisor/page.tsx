@@ -72,7 +72,7 @@ export default function SupervisorDailyReportPage() {
   const selectedArea = useMemo(() => selectedWorkplace?.areas.find((area) => area.id === form.areaId), [selectedWorkplace, form.areaId]);
 
   const isAdministrator = Boolean(sessionUser?.roles.includes("administrator"));
-  const canSubmitAttendance = Boolean(sessionUser?.roles.some((role) => ["administrator", "supervisor", "operations"].includes(role)));
+  const canSubmitAttendance = Boolean(sessionUser?.roles.some((role) => ["administrator", "general_manager", "general_supervisor", "supervisor", "operations"].includes(role)));
   const visibleContracts = useMemo(() => filterContractsBySession(contracts, sessionUser), [contracts, sessionUser]);
   const visibleReports = useMemo(() => filterReportsBySession(reports, sessionUser), [reports, sessionUser]);
   const contractOptions = useMemo(
@@ -678,7 +678,7 @@ function findAttendanceReport(reports: SupervisorReport[], report: SupervisorRep
 }
 
 function filterContractsBySession(contracts: ServiceContract[], user: SessionUser | null) {
-  if (!user || user.roles.includes("administrator") || user.roles.includes("operations") || user.roles.includes("accounting") || user.roles.includes("legal_representative")) return contracts;
+  if (!user || user.roles.some((role) => ["administrator", "general_manager", "general_accountant", "general_secretary", "general_supervisor", "operations", "accounting", "legal_representative"].includes(role))) return contracts;
   if (!user.roles.includes("supervisor")) return contracts;
   const identity = userIdentity(user);
   return contracts.filter((contract) =>
@@ -690,7 +690,7 @@ function filterContractsBySession(contracts: ServiceContract[], user: SessionUse
 }
 
 function filterReportsBySession(reports: SupervisorReport[], user: SessionUser | null) {
-  if (!user || user.roles.includes("administrator") || user.roles.includes("operations") || user.roles.includes("accounting") || user.roles.includes("legal_representative")) return reports;
+  if (!user || user.roles.some((role) => ["administrator", "general_manager", "general_accountant", "general_secretary", "general_supervisor", "operations", "accounting", "legal_representative"].includes(role))) return reports;
   if (!user.roles.includes("supervisor")) return reports;
   const identity = userIdentity(user);
   return reports.filter((report) => identityIncludes(identity, `${report.supervisor || ""} ${report.supervisorId || ""}`.toLowerCase()));

@@ -7,6 +7,18 @@ import { getDefaultAccessForRoles } from "@/lib/roleAccess";
 import { roleLabels } from "@/lib/userRoles";
 import type { AdminOverviewItem, AdminUser, AdminUserInput, UserRole, Worker } from "@/types/admin";
 
+const moduleGroups = [
+  { title: "Contenido web", description: "Publicaciones, galeria y respaldo institucional.", keys: ["blog", "gallery", "certifications", "backups", "audits"] },
+  { title: "Talento humano", description: "Personal, ingresos, documentos e historial laboral.", keys: ["workers", "worker-intake", "worker-documents", "labor-history"] },
+  { title: "Clientes y contratos", description: "Empresas, clientes, contratos, lugares, areas, horarios y asignaciones.", keys: ["clients", "contracts-shifts", "work-groups"] },
+  { title: "Operaciones", description: "Asistencia diaria, aprobaciones y control operativo.", keys: ["supervisor-daily-report", "report-approvals", "supply-control"] },
+  { title: "Contratacion publica", description: "Procesos, cronograma, alertas y seguimiento.", keys: ["hiring-processes", "process-calendar", "process-tracking"] },
+  { title: "Recursos e inventario", description: "Equipos, productos y kits por empresa.", keys: ["machines", "supply-products", "supply-kits"] },
+  { title: "Finanzas y contabilidad", description: "Contabilidad, calculo de pagos y dashboards contables.", keys: ["dashboard-accounting", "accounting", "payment-calculation"] },
+  { title: "Reportes y comunicacion", description: "Dashboards, exportaciones y notificaciones internas.", keys: ["dashboard-supervisor", "exports", "notifications"] },
+  { title: "Administracion y seguridad", description: "Usuarios, roles, catalogos y configuracion del SIT.", keys: ["users", "roles", "catalogs", "service-types"] },
+];
+
 const emptyUser: AdminUserInput = {
   workerId: "",
   workerDocumentId: "",
@@ -118,12 +130,10 @@ export default function UsersModulePage() {
     setUserForm({
       ...userForm,
       roles: nextRoles,
-      moduleAccess: Array.from(new Set([...userForm.moduleAccess, ...getDefaultAccessForRoles(nextRoles)])),
     });
   }
 
   function toggleModuleAccess(moduleKey: string) {
-    if (roleModuleAccess.has(moduleKey)) return;
     const moduleAccess = userForm.moduleAccess.includes(moduleKey)
       ? userForm.moduleAccess.filter((currentModule) => currentModule !== moduleKey)
       : [...userForm.moduleAccess, moduleKey];
@@ -143,6 +153,35 @@ export default function UsersModulePage() {
   );
   const roleModuleAccess = useMemo(() => new Set(getDefaultAccessForRoles(userForm.roles)), [userForm.roles]);
   const isAdministrator = userForm.roles.includes("administrator");
+  const modulesByKey = useMemo(() => new Map(modules.map((module) => [module.key, module])), [modules]);
+  const groupedModules = useMemo(() => {
+    const seen = new Set<string>();
+    const groups = moduleGroups
+      .map((group) => {
+        const groupModules = group.keys
+          .map((key) => modulesByKey.get(key))
+          .filter((module): module is AdminOverviewItem => Boolean(module));
+        groupModules.forEach((module) => seen.add(module.key));
+        return { ...group, modules: groupModules };
+      })
+      .filter((group) => group.modules.length > 0);
+    const remaining = modules.filter((module) => !seen.has(module.key));
+    if (remaining.length) {
+      groups.push({
+        title: "Otros modulos",
+        description: "Accesos adicionales no clasificados.",
+        keys: remaining.map((module) => module.key),
+        modules: remaining,
+      });
+    }
+    return groups;
+  }, [modules, modulesByKey]);
+
+  function isModuleChecked(moduleKey: string) {
+    return isAdministrator || userForm.moduleAccess.includes(moduleKey);
+  }
+
+  const effectiveModuleCount = modules.filter((module) => isModuleChecked(module.key)).length;
 
   return (
     <SystemModulePage moduleKey="users">
@@ -233,21 +272,55 @@ export default function UsersModulePage() {
           </section>
 
           <section className="mt-4 rounded-lg border border-slate-200 p-4">
-            <h3 className="font-bold text-[#173C61]">Accesos a modulos</h3>
-            <div className="mt-3 grid gap-2 sm:grid-cols-2">
-              {modules.map((module) => (
-                <label key={module.key} className="flex items-center gap-3 rounded-md bg-slate-50 px-3 py-2 text-sm text-slate-700">
-                  <input
-                    type="checkbox"
-                    checked={isAdministrator || roleModuleAccess.has(module.key) || userForm.moduleAccess.includes(module.key)}
-                    disabled={isAdministrator || roleModuleAccess.has(module.key)}
-                    onChange={() => toggleModuleAccess(module.key)}
-                  />
-                  <span className="min-w-0 flex-1">{module.title}</span>
-                  {(isAdministrator || roleModuleAccess.has(module.key)) && (
-                    <span className="rounded-full bg-[#E6F8F9] px-2 py-1 text-[11px] font-bold text-[#173C61]">Por rol</span>
-                  )}
-                </label>
+            <div className="flex flex-col gap-2 sm:flex-row sm:items-end sm:justify-between">
+              <div>
+                <h3 className="font-bold text-[#173C61]">Accesos a modulos</h3>
+                <p className="mt-1 text-sm text-slate-500">Organizados por submodulos del SIT. Los permisos sugeridos por rol se pueden cambiar manualmente.</p>
+              </div>
+              <span className="rounded-full bg-[#E6F8F9] px-3 py-1 text-xs font-bold text-[#173C61]">
+                {effectiveModuleCount} activo(s)
+              </span>
+            </div>
+            <div className="mt-4 grid gap-4 xl:grid-cols-2">
+              {groupedModules.map((group) => (
+                <section key={group.title} className="rounded-lg border border-slate-200 bg-white p-4 shadow-sm">
+                  <div className="mb-3 border-b border-slate-100 pb-3">
+                    <div className="flex items-start justify-between gap-3">
+                      <div>
+                        <h4 className="font-bold text-[#173C61]">{group.title}</h4>
+                        <p className="mt-1 text-xs leading-5 text-slate-500">{group.description}</p>
+                      </div>
+                      <span className="shrink-0 rounded-full bg-slate-100 px-2 py-1 text-[11px] font-bold text-slate-600">
+                        {group.modules.filter((module) => isModuleChecked(module.key)).length}/{group.modules.length}
+                      </span>
+                    </div>
+                  </div>
+
+                  <div className="grid gap-2">
+                    {group.modules.map((module) => {
+                      const suggested = roleModuleAccess.has(module.key);
+                      const checked = isModuleChecked(module.key);
+                      return (
+                        <label
+                          key={module.key}
+                          className={`flex min-h-11 items-center gap-3 rounded-md border px-3 py-2 text-sm transition ${
+                            checked
+                              ? "border-[#33C3C9]/35 bg-[#F0FCFD] text-[#173C61]"
+                              : "border-slate-100 bg-slate-50 text-slate-700 hover:border-slate-200"
+                          } cursor-pointer`}
+                        >
+                          <input
+                            type="checkbox"
+                            checked={checked}
+                            onChange={() => toggleModuleAccess(module.key)}
+                          />
+                          <span className="min-w-0 flex-1 font-medium">{module.title}</span>
+                          {suggested && <span className="rounded-full bg-[#E6F8F9] px-2 py-1 text-[11px] font-bold text-[#173C61]">Sugerido</span>}
+                        </label>
+                      );
+                    })}
+                  </div>
+                </section>
               ))}
             </div>
           </section>

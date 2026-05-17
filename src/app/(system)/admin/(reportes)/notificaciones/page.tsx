@@ -25,6 +25,10 @@ export default function NotificationsPage() {
           { key: "role", label: "Rol", type: "select", options: [
             { value: "all", label: "Todos" },
             { value: "administrator", label: "Administrador" },
+            { value: "general_manager", label: "Gerente general" },
+            { value: "general_accountant", label: "Contadora general" },
+            { value: "general_secretary", label: "Secretaria general" },
+            { value: "general_supervisor", label: "Supervisor general" },
             { value: "supervisor", label: "Supervisor" },
             { value: "operations", label: "Operaciones" },
             { value: "human_resources", label: "RR. HH." },

@@ -18,11 +18,15 @@ import {
   syncHiringAliases,
   toDateTimeInput,
 } from "@/lib/hiringProcessUtils";
-import type { AgendaActividad, CronogramaFecha, HiringProcess, HiringProcessStatus, WorkGroup } from "@/types/admin";
+import type { AgendaActividad, CronogramaFecha, HiringProcess, HiringProcessStatus, HiringProcessWorkGroup, UserRole, WorkGroup } from "@/types/admin";
 
 type TabKey = "main" | "timeline" | "agenda" | "files";
 type AgendaView = "list" | "calendar";
 type ImportModalType = "process" | "timeline" | null;
+type SessionUser = {
+  roles: UserRole[];
+  workGroups?: HiringProcessWorkGroup[];
+};
 
 const emptyProcess: HiringProcess = syncHiringAliases({
   numeroProceso: "",
@@ -39,6 +43,7 @@ const emptyProcess: HiringProcess = syncHiringAliases({
   areaResponsable: "Sin area",
   workGroupId: "",
   workGroupName: "",
+  workGroups: [],
   processOwner: "",
   estadoProceso: "Planificado",
   winningCompany: "",
@@ -87,6 +92,9 @@ const emptyActivity: AgendaActividad = {
   fechaHoraInicio: "",
   fechaHoraFin: "",
   responsable: "",
+  workGroupId: "",
+  workGroupName: "",
+  workGroupLogoUrl: "",
   prioridad: "Media",
   estado: "Pendiente",
   origen: "Manual",
@@ -98,6 +106,7 @@ const emptyActivity: AgendaActividad = {
 export default function HiringProcessesPage() {
   const [items, setItems] = useState<HiringProcess[]>([]);
   const [workGroups, setWorkGroups] = useState<WorkGroup[]>([]);
+  const [sessionUser, setSessionUser] = useState<SessionUser | null>(null);
   const [isAdministrator, setIsAdministrator] = useState(false);
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const [form, setForm] = useState<HiringProcess>(createEmptyProcess());
@@ -113,6 +122,7 @@ export default function HiringProcessesPage() {
   const [importFile, setImportFile] = useState<File | null>(null);
   const [agendaView, setAgendaView] = useState<AgendaView>("list");
   const [agendaFilters, setAgendaFilters] = useState({ estado: "", prioridad: "", responsable: "", proceso: "", desde: "", hasta: "" });
+  const canManageProcesses = canAssignProcessGroups(sessionUser);
 
   const selected = useMemo(() => items.find((item) => item._id === selectedId), [items, selectedId]);
   const filteredItems = useMemo(() => {
@@ -153,7 +163,10 @@ export default function HiringProcessesPage() {
     loadItems();
     fetch("/api/admin/me", { cache: "no-store" })
       .then((res) => (res.ok ? res.json() : null))
-      .then((data) => setIsAdministrator(Boolean(data?.user?.roles?.includes("administrator"))))
+      .then((data) => {
+        setSessionUser(data?.user || null);
+        setIsAdministrator(Boolean(data?.user?.roles?.includes("administrator")));
+      })
       .catch(() => setIsAdministrator(false));
   }, []);
 
@@ -186,10 +199,9 @@ export default function HiringProcessesPage() {
   function startNew() {
     setIsCreatingNew(true);
     setSelectedId(null);
-    setForm(createEmptyProcess());
+    setForm(createProcessWithDefaultGroups(createEmptyProcess(), sessionUser, workGroups));
     setTab("main");
     setStatus(null);
-    notifySystem("Formulario listo para registrar un nuevo proceso.", { title: "Nuevo proceso", tone: "info" });
   }
 
   async function saveProcess(e?: FormEvent) {
@@ -205,7 +217,7 @@ export default function HiringProcessesPage() {
     if (!form.cronograma.length) setStatus("Agregue al menos una fecha importante del proceso.");
     else setStatus("Guardando proceso...");
 
-    const payload = syncHiringAliases(form);
+    const payload = syncHiringAliases(ensurePrimaryWorkGroup(form));
     const isNew = !payload._id;
     const res = await fetch(isNew ? "/api/admin/hiring-processes" : `/api/admin/hiring-processes/${payload._id}`, {
       method: isNew ? "POST" : "PUT",
@@ -426,7 +438,9 @@ export default function HiringProcessesPage() {
 
       <section className="grid gap-6 xl:grid-cols-[24rem_1fr]">
         <aside className="rounded-lg border border-slate-200 bg-white p-4 shadow-sm">
-          <button onClick={startNew} className="mb-3 w-full rounded-md bg-[#173C61] px-4 py-3 font-semibold text-white hover:bg-[#218F93]">Nuevo proceso</button>
+          {canManageProcesses && (
+            <button onClick={startNew} className="mb-3 w-full rounded-md bg-[#173C61] px-4 py-3 font-semibold text-white hover:bg-[#218F93]">Nuevo proceso</button>
+          )}
           <input className={inputClass} placeholder="Buscar por numero, entidad u objeto..." value={query} onChange={(e) => setQuery(e.target.value)} />
           <div className="mt-4 space-y-2">
             {filteredItems.map((item) => {
@@ -455,9 +469,9 @@ export default function HiringProcessesPage() {
               <p className="mt-1 text-sm text-slate-600">{form.objetoProceso || "Registra los datos principales, cronograma y agenda operacional."}</p>
             </div>
             <div className="flex flex-wrap gap-2">
-              <button type="button" onClick={() => openImportModal("process")} className="rounded-md border border-slate-300 px-4 py-2 text-sm font-semibold text-[#173C61] hover:bg-slate-50">Importar proceso</button>
-              <button type="button" onClick={() => openImportModal("timeline")} className="rounded-md border border-slate-300 px-4 py-2 text-sm font-semibold text-[#173C61] hover:bg-slate-50">Importar cronograma</button>
-              <button onClick={() => saveProcess()} className="rounded-md bg-[#173C61] px-4 py-2 text-sm font-semibold text-white hover:bg-[#218F93]">{form._id ? "Actualizar proceso" : "Guardar proceso"}</button>
+              {canManageProcesses && <button type="button" onClick={() => openImportModal("process")} className="rounded-md border border-slate-300 px-4 py-2 text-sm font-semibold text-[#173C61] hover:bg-slate-50">Importar proceso</button>}
+              {canManageProcesses && <button type="button" onClick={() => openImportModal("timeline")} className="rounded-md border border-slate-300 px-4 py-2 text-sm font-semibold text-[#173C61] hover:bg-slate-50">Importar cronograma</button>}
+              {canManageProcesses && <button onClick={() => saveProcess()} className="rounded-md bg-[#173C61] px-4 py-2 text-sm font-semibold text-white hover:bg-[#218F93]">{form._id ? "Actualizar proceso" : "Guardar proceso"}</button>}
               {form._id && isAdministrator && <button onClick={deleteProcess} className="rounded-md border border-red-200 px-4 py-2 text-sm font-semibold text-red-700 hover:bg-red-50">Eliminar proceso</button>}
             </div>
           </div>
@@ -473,7 +487,16 @@ export default function HiringProcessesPage() {
             ))}
           </div>
 
-          {tab === "main" && <MainTab form={form} workGroups={workGroups} onChange={(next) => setForm(syncHiringAliases(next))} onSubmit={saveProcess} />}
+          {tab === "main" && (
+            <MainTab
+              form={form}
+              workGroups={workGroups}
+              canAssignMultiple={canManageProcesses}
+              readOnly={!canManageProcesses}
+              onChange={(next) => setForm(syncHiringAliases(ensurePrimaryWorkGroup(next)))}
+              onSubmit={saveProcess}
+            />
+          )}
           {tab === "timeline" && (
             <TimelineTab
               form={form}
@@ -482,6 +505,7 @@ export default function HiringProcessesPage() {
               onSaveDate={saveScheduleDate}
               onEditDate={editScheduleDate}
               onDeleteDate={deleteScheduleDate}
+              readOnly={!canManageProcesses}
             />
           )}
           {tab === "agenda" && (
@@ -506,6 +530,7 @@ export default function HiringProcessesPage() {
       {activityModalOpen && (
         <ActivityModal
           activityForm={activityForm}
+          workGroups={getProcessWorkGroups(form)}
           onActivityChange={setActivityForm}
           onSaveActivity={saveActivity}
           onClose={() => { setActivityModalOpen(false); setActivityForm(emptyActivity); }}
@@ -524,73 +549,113 @@ export default function HiringProcessesPage() {
   );
 }
 
-function MainTab({ form, workGroups, onChange, onSubmit }: { form: HiringProcess; workGroups: WorkGroup[]; onChange: (form: HiringProcess) => void; onSubmit: (e: FormEvent) => void }) {
+function MainTab({
+  form,
+  workGroups,
+  canAssignMultiple,
+  readOnly,
+  onChange,
+  onSubmit,
+}: {
+  form: HiringProcess;
+  workGroups: WorkGroup[];
+  canAssignMultiple: boolean;
+  readOnly: boolean;
+  onChange: (form: HiringProcess) => void;
+  onSubmit: (e: FormEvent) => void;
+}) {
+  const assignedGroups = getProcessWorkGroups(form);
+
   return (
     <form onSubmit={onSubmit} className="grid gap-4 sm:grid-cols-2">
-      <Field label="Numero de proceso"><input required className={inputClass} value={form.numeroProceso} onChange={(e) => onChange({ ...form, numeroProceso: e.target.value })} /></Field>
-      <Field label="Entidad / cliente"><input required className={inputClass} value={form.entidadCliente} onChange={(e) => onChange({ ...form, entidadCliente: e.target.value })} /></Field>
-      <Field label="Objeto del proceso"><textarea required className={`${inputClass} min-h-28`} value={form.objetoProceso} onChange={(e) => onChange({ ...form, objetoProceso: e.target.value })} /></Field>
-      <Field label="Descripcion"><textarea className={`${inputClass} min-h-28`} value={form.descripcion || ""} onChange={(e) => onChange({ ...form, descripcion: e.target.value })} /></Field>
-      <Field label="Tipo compra"><input className={inputClass} value={form.tipoCompra || ""} onChange={(e) => onChange({ ...form, tipoCompra: e.target.value })} /></Field>
-      <Field label="Tipo contratacion"><input className={inputClass} value={form.tipoContratacion || ""} onChange={(e) => onChange({ ...form, tipoContratacion: e.target.value })} /></Field>
-      <Field label="Presupuesto referencial sin IVA"><input type="number" step="0.01" className={inputClass} value={form.presupuestoReferencialSinIva || 0} onChange={(e) => onChange({ ...form, presupuestoReferencialSinIva: Number(e.target.value) })} /></Field>
-      <Field label="Forma de pago"><input className={inputClass} value={form.formaPago || ""} onChange={(e) => onChange({ ...form, formaPago: e.target.value })} /></Field>
-      <Field label="Tipo adjudicacion"><input className={inputClass} value={form.tipoAdjudicacion || ""} onChange={(e) => onChange({ ...form, tipoAdjudicacion: e.target.value })} /></Field>
-      <Field label="Plazo entrega dias"><input type="number" className={inputClass} value={form.plazoEntregaDias || 0} onChange={(e) => onChange({ ...form, plazoEntregaDias: Number(e.target.value) })} /></Field>
-      <Field label="Vigencia oferta dias"><input type="number" className={inputClass} value={form.vigenciaOfertaDias || 0} onChange={(e) => onChange({ ...form, vigenciaOfertaDias: Number(e.target.value) })} /></Field>
-      <Field label="Funcionario encargado"><input type="email" className={inputClass} value={form.funcionarioEncargado || ""} onChange={(e) => onChange({ ...form, funcionarioEncargado: e.target.value })} /></Field>
-      <Field label="Grupo de trabajo">
-        <select
-          className={inputClass}
-          value={form.workGroupId || ""}
-          onChange={(e) => {
-            const group = workGroups.find((item) => item._id === e.target.value);
-            onChange({ ...form, workGroupId: group?._id || "", workGroupName: group?.name || "" });
-          }}
-        >
-          <option value="">Sin grupo asignado</option>
-          {workGroups.map((group) => <option key={group._id || group.name} value={group._id}>{group.name}</option>)}
-        </select>
+      {readOnly && <p className="sm:col-span-2 rounded-md border border-slate-200 bg-slate-50 px-4 py-3 text-sm font-semibold text-slate-600">Datos principales en modo lectura para empresas asignadas.</p>}
+      <Field label="Numero de proceso"><input required readOnly={readOnly} className={fieldClass(readOnly)} value={form.numeroProceso} onChange={(e) => onChange({ ...form, numeroProceso: e.target.value })} /></Field>
+      <Field label="Entidad / cliente"><input required readOnly={readOnly} className={fieldClass(readOnly)} value={form.entidadCliente} onChange={(e) => onChange({ ...form, entidadCliente: e.target.value })} /></Field>
+      <Field label="Objeto del proceso"><textarea required readOnly={readOnly} className={`${fieldClass(readOnly)} min-h-28`} value={form.objetoProceso} onChange={(e) => onChange({ ...form, objetoProceso: e.target.value })} /></Field>
+      <Field label="Descripcion"><textarea readOnly={readOnly} className={`${fieldClass(readOnly)} min-h-28`} value={form.descripcion || ""} onChange={(e) => onChange({ ...form, descripcion: e.target.value })} /></Field>
+      <Field label="Tipo compra"><input readOnly={readOnly} className={fieldClass(readOnly)} value={form.tipoCompra || ""} onChange={(e) => onChange({ ...form, tipoCompra: e.target.value })} /></Field>
+      <Field label="Tipo contratacion"><input readOnly={readOnly} className={fieldClass(readOnly)} value={form.tipoContratacion || ""} onChange={(e) => onChange({ ...form, tipoContratacion: e.target.value })} /></Field>
+      <Field label="Presupuesto referencial sin IVA"><input readOnly={readOnly} type="number" step="0.01" className={fieldClass(readOnly)} value={form.presupuestoReferencialSinIva || 0} onChange={(e) => onChange({ ...form, presupuestoReferencialSinIva: Number(e.target.value) })} /></Field>
+      <Field label="Forma de pago"><input readOnly={readOnly} className={fieldClass(readOnly)} value={form.formaPago || ""} onChange={(e) => onChange({ ...form, formaPago: e.target.value })} /></Field>
+      <Field label="Tipo adjudicacion"><input readOnly={readOnly} className={fieldClass(readOnly)} value={form.tipoAdjudicacion || ""} onChange={(e) => onChange({ ...form, tipoAdjudicacion: e.target.value })} /></Field>
+      <Field label="Plazo entrega dias"><input readOnly={readOnly} type="number" className={fieldClass(readOnly)} value={form.plazoEntregaDias || 0} onChange={(e) => onChange({ ...form, plazoEntregaDias: Number(e.target.value) })} /></Field>
+      <Field label="Vigencia oferta dias"><input readOnly={readOnly} type="number" className={fieldClass(readOnly)} value={form.vigenciaOfertaDias || 0} onChange={(e) => onChange({ ...form, vigenciaOfertaDias: Number(e.target.value) })} /></Field>
+      <Field label="Funcionario encargado"><input readOnly={readOnly} type="email" className={fieldClass(readOnly)} value={form.funcionarioEncargado || ""} onChange={(e) => onChange({ ...form, funcionarioEncargado: e.target.value })} /></Field>
+      <Field label={canAssignMultiple ? "Empresas asignadas" : "Empresa asignada"}>
+        {canAssignMultiple ? (
+          <div className="rounded-md border border-slate-300 bg-white p-3">
+            <div className="grid max-h-52 gap-2 overflow-auto pr-1 sm:grid-cols-2">
+              {workGroups.map((group) => {
+                const groupId = group._id || "";
+                const groupName = group.name || group.commercialName || "";
+                const checked = assignedGroups.some((item) => (groupId && item.id === groupId) || item.name === groupName);
+                return (
+                  <label key={groupId || groupName} className={`flex items-center gap-3 rounded-md border px-3 py-2 text-sm font-semibold ${checked ? "border-[#33C3C9] bg-[#E6F8F9] text-[#173C61]" : "border-slate-200 text-slate-700"}`}>
+                    <input
+                      type="checkbox"
+                      checked={checked}
+                      disabled={readOnly}
+                      onChange={(event) => onChange(toggleProcessWorkGroup(form, group, event.target.checked))}
+                    />
+                    <span className="min-w-0 truncate">{groupName || "Sin nombre"}</span>
+                  </label>
+                );
+              })}
+            </div>
+            {!workGroups.length && <p className="text-sm font-semibold text-slate-500">No hay empresas registradas.</p>}
+            {assignedGroups.length > 0 && (
+              <p className="mt-3 text-xs font-semibold text-slate-500">
+                Asignadas: {assignedGroups.map((group) => group.name).join(", ")}
+              </p>
+            )}
+          </div>
+        ) : (
+          <div className="rounded-md border border-slate-300 bg-slate-50 px-4 py-3 text-sm font-bold text-[#173C61]">
+            {assignedGroups.map((group) => group.name).join(", ") || form.workGroupName || "Sin empresa asignada"}
+          </div>
+        )}
       </Field>
-      <Field label="Responsable interno"><input className={inputClass} value={form.processOwner || ""} onChange={(e) => onChange({ ...form, processOwner: e.target.value })} /></Field>
+      <Field label="Responsable interno"><input readOnly={readOnly} className={fieldClass(readOnly)} value={form.processOwner || ""} onChange={(e) => onChange({ ...form, processOwner: e.target.value })} /></Field>
       <Field label="Area responsable">
-        <select className={inputClass} value={form.areaResponsable || "Sin area"} onChange={(e) => onChange({ ...form, areaResponsable: e.target.value })}>
+        <select disabled={readOnly} className={fieldClass(readOnly)} value={form.areaResponsable || "Sin area"} onChange={(e) => onChange({ ...form, areaResponsable: e.target.value })}>
           {areaOptions.map((area) => <option key={area} value={area}>{area}</option>)}
         </select>
       </Field>
       <Field label="Estado proceso">
-        <select className={inputClass} value={form.estadoProceso} onChange={(e) => onChange({ ...form, estadoProceso: e.target.value as HiringProcessStatus })}>
+        <select disabled={readOnly} className={fieldClass(readOnly)} value={form.estadoProceso} onChange={(e) => onChange({ ...form, estadoProceso: e.target.value as HiringProcessStatus })}>
           {hiringProcessStatuses.map((status) => <option key={status} value={status}>{status}</option>)}
         </select>
       </Field>
-      <Field label="Fecha inicio"><input type="date" className={inputClass} value={form.fechaInicio?.slice(0, 10) || ""} onChange={(e) => onChange({ ...form, fechaInicio: e.target.value })} /></Field>
-      <Field label="Fecha vencimiento"><input type="date" className={inputClass} value={form.fechaVencimiento?.slice(0, 10) || ""} onChange={(e) => onChange({ ...form, fechaVencimiento: e.target.value })} /></Field>
+      <Field label="Fecha inicio"><input readOnly={readOnly} type="date" className={fieldClass(readOnly)} value={form.fechaInicio?.slice(0, 10) || ""} onChange={(e) => onChange({ ...form, fechaInicio: e.target.value })} /></Field>
+      <Field label="Fecha vencimiento"><input readOnly={readOnly} type="date" className={fieldClass(readOnly)} value={form.fechaVencimiento?.slice(0, 10) || ""} onChange={(e) => onChange({ ...form, fechaVencimiento: e.target.value })} /></Field>
       {(form.estadoProceso === "Adjudicado" || form.estadoProceso === "Finalizado") && (
         <>
-          <Field label="Empresa ganadora"><input className={inputClass} value={form.winningCompany || ""} onChange={(e) => onChange({ ...form, winningCompany: e.target.value })} /></Field>
-          <Field label="Precio adjudicado"><input type="number" step="0.01" className={inputClass} value={form.winningPrice || 0} onChange={(e) => onChange({ ...form, winningPrice: Number(e.target.value) })} /></Field>
+          <Field label="Empresa ganadora"><input readOnly={readOnly} className={fieldClass(readOnly)} value={form.winningCompany || ""} onChange={(e) => onChange({ ...form, winningCompany: e.target.value })} /></Field>
+          <Field label="Precio adjudicado"><input readOnly={readOnly} type="number" step="0.01" className={fieldClass(readOnly)} value={form.winningPrice || 0} onChange={(e) => onChange({ ...form, winningPrice: Number(e.target.value) })} /></Field>
         </>
       )}
-      <Field label="Notas"><textarea className={`${inputClass} min-h-28`} value={form.notas || ""} onChange={(e) => onChange({ ...form, notas: e.target.value })} /></Field>
-      <div className="sm:col-span-2">
+      <Field label="Notas"><textarea readOnly={readOnly} className={`${fieldClass(readOnly)} min-h-28`} value={form.notas || ""} onChange={(e) => onChange({ ...form, notas: e.target.value })} /></Field>
+      {!readOnly && <div className="sm:col-span-2">
         <button className="rounded-md bg-[#173C61] px-5 py-3 font-semibold text-white hover:bg-[#218F93]">Guardar proceso</button>
-      </div>
+      </div>}
     </form>
   );
 }
 
-function TimelineTab({ form, scheduleForm, onScheduleChange, onSaveDate, onEditDate, onDeleteDate }: {
+function TimelineTab({ form, scheduleForm, onScheduleChange, onSaveDate, onEditDate, onDeleteDate, readOnly }: {
   form: HiringProcess;
   scheduleForm: CronogramaFecha;
   onScheduleChange: (item: CronogramaFecha) => void;
   onSaveDate: () => void;
   onEditDate: (item: CronogramaFecha) => void;
   onDeleteDate: (id: string) => void;
+  readOnly: boolean;
 }) {
   return (
     <div>
       {!form.cronograma.length && <p className="mb-4 rounded-md border border-amber-200 bg-amber-50 px-4 py-3 text-sm font-semibold text-amber-800">Agregue al menos una fecha importante del proceso.</p>}
-      <div className="grid gap-4 rounded-lg border border-slate-200 bg-slate-50 p-4 sm:grid-cols-2">
+      {readOnly && <p className="mb-4 rounded-md border border-slate-200 bg-slate-50 px-4 py-3 text-sm font-semibold text-slate-600">Cronograma en modo lectura para empresas asignadas.</p>}
+      {!readOnly && <div className="grid gap-4 rounded-lg border border-slate-200 bg-slate-50 p-4 sm:grid-cols-2">
         <Field label="Tipo de fecha">
           <select className={inputClass} value={scheduleForm.tipoFecha} onChange={(e) => onScheduleChange({ ...scheduleForm, tipoFecha: e.target.value })}>
             {dateTypes.map((type) => <option key={type} value={type}>{type}</option>)}
@@ -602,12 +667,12 @@ function TimelineTab({ form, scheduleForm, onScheduleChange, onSaveDate, onEditD
         <div className="sm:col-span-2">
           <button type="button" onClick={onSaveDate} className="rounded-md bg-[#173C61] px-5 py-3 font-semibold text-white hover:bg-[#218F93]">{scheduleForm.id ? "Actualizar fecha" : "Agregar fecha"}</button>
         </div>
-      </div>
+      </div>}
 
       <div className="mt-5 overflow-x-auto rounded-lg border border-slate-200">
         <table className="w-full min-w-[780px] text-left text-sm">
           <thead className="bg-slate-50 text-xs uppercase tracking-[0.08em] text-slate-500">
-            <tr><th className="p-3">Tipo</th><th className="p-3">Fecha</th><th className="p-3">Descripcion</th><th className="p-3">Estado</th><th className="p-3">Acciones</th></tr>
+            <tr><th className="p-3">Tipo</th><th className="p-3">Fecha</th><th className="p-3">Descripcion</th><th className="p-3">Estado</th>{!readOnly && <th className="p-3">Acciones</th>}</tr>
           </thead>
           <tbody className="divide-y divide-slate-200">
             {form.cronograma.map((fecha) => (
@@ -616,12 +681,12 @@ function TimelineTab({ form, scheduleForm, onScheduleChange, onSaveDate, onEditD
                 <td className="p-3">{formatHiringDateTime(fecha.fechaHora)}</td>
                 <td className="p-3">{fecha.descripcion}</td>
                 <td className="p-3"><ScheduleBadge status={obtenerEstadoFecha(fecha.fechaHora, fecha.estado === "Cumplida")} /></td>
-                <td className="p-3">
+                {!readOnly && <td className="p-3">
                   <div className="flex gap-2">
                     <button type="button" onClick={() => onEditDate(fecha)} className="rounded-md border border-slate-200 px-3 py-1.5 font-semibold text-slate-700 hover:bg-slate-50">Editar</button>
                     <button type="button" onClick={() => onDeleteDate(fecha.id)} className="rounded-md border border-red-200 px-3 py-1.5 font-semibold text-red-700 hover:bg-red-50">Eliminar</button>
                   </div>
-                </td>
+                </td>}
               </tr>
             ))}
           </tbody>
@@ -674,6 +739,9 @@ function AgendaTab({ visibleAgenda, agendaView, filters, onViewChange, onFilters
                   <p className="font-bold text-[#173C61]">{actividad.titulo}</p>
                   <p className="mt-1 text-sm text-slate-600">{actividad.descripcion}</p>
                   <p className="mt-2 text-xs font-semibold text-slate-500">{formatHiringDateTime(actividad.fechaHoraInicio)} | {actividad.responsable || "Sin responsable"} | {actividad.origen}</p>
+                  <p className="mt-2 inline-flex rounded-full bg-[#E6F8F9] px-2.5 py-1 text-xs font-bold text-[#173C61]">
+                    {actividad.workGroupName || "Sin empresa asignada"}
+                  </p>
                 </div>
                 <div className="flex flex-wrap gap-2">
                   <ActivityBadge activity={actividad} />
@@ -691,8 +759,9 @@ function AgendaTab({ visibleAgenda, agendaView, filters, onViewChange, onFilters
   );
 }
 
-function ActivityModal({ activityForm, onActivityChange, onSaveActivity, onClose }: {
+function ActivityModal({ activityForm, workGroups, onActivityChange, onSaveActivity, onClose }: {
   activityForm: AgendaActividad;
+  workGroups: HiringProcessWorkGroup[];
   onActivityChange: (activity: AgendaActividad) => void;
   onSaveActivity: () => void;
   onClose: () => void;
@@ -710,6 +779,24 @@ function ActivityModal({ activityForm, onActivityChange, onSaveActivity, onClose
         <div className="grid gap-4 sm:grid-cols-2">
           <Field label="Titulo"><input className={inputClass} value={activityForm.titulo} onChange={(e) => onActivityChange({ ...activityForm, titulo: e.target.value })} /></Field>
           <Field label="Responsable"><input className={inputClass} value={activityForm.responsable || ""} onChange={(e) => onActivityChange({ ...activityForm, responsable: e.target.value })} /></Field>
+          <Field label="Empresa responsable">
+            <select
+              className={inputClass}
+              value={activityForm.workGroupId || activityForm.workGroupName || ""}
+              onChange={(e) => {
+                const selected = workGroups.find((group) => (group.id || group.name) === e.target.value);
+                onActivityChange({
+                  ...activityForm,
+                  workGroupId: selected?.id || "",
+                  workGroupName: selected?.name || "",
+                  workGroupLogoUrl: selected?.logoUrl || "",
+                });
+              }}
+            >
+              <option value="">Sin empresa asignada</option>
+              {workGroups.map((group) => <option key={group.id || group.name} value={group.id || group.name}>{group.name}</option>)}
+            </select>
+          </Field>
           <Field label="Inicio"><input type="datetime-local" className={inputClass} value={toDateTimeInput(activityForm.fechaHoraInicio)} onChange={(e) => onActivityChange({ ...activityForm, fechaHoraInicio: fromDateTimeInput(e.target.value) })} /></Field>
           <Field label="Fin"><input type="datetime-local" className={inputClass} value={toDateTimeInput(activityForm.fechaHoraFin)} onChange={(e) => onActivityChange({ ...activityForm, fechaHoraFin: fromDateTimeInput(e.target.value) })} /></Field>
           <Field label="Prioridad"><select className={inputClass} value={activityForm.prioridad} onChange={(e) => onActivityChange({ ...activityForm, prioridad: e.target.value as AgendaActividad["prioridad"] })}>{["Alta", "Media", "Baja"].map((item) => <option key={item}>{item}</option>)}</select></Field>
@@ -906,8 +993,56 @@ function toDateKey(date: Date) {
   return `${date.getFullYear()}-${pad(date.getMonth() + 1)}-${pad(date.getDate())}`;
 }
 
+function canAssignProcessGroups(user: SessionUser | null) {
+  const roles = user?.roles || [];
+  return roles.some((role) => ["administrator", "general_manager", "general_supervisor", "general_secretary"].includes(role));
+}
+
+function getProcessWorkGroups(process: HiringProcess): HiringProcessWorkGroup[] {
+  if (process.workGroups?.length) return process.workGroups.filter((group) => group.id || group.name);
+  if (process.workGroupId || process.workGroupName) return [{ id: process.workGroupId || "", name: process.workGroupName || "Sin nombre" }];
+  return [];
+}
+
+function ensurePrimaryWorkGroup(process: HiringProcess): HiringProcess {
+  const groups = getProcessWorkGroups(process);
+  const primary = groups[0];
+  return {
+    ...process,
+    workGroups: groups,
+    workGroupId: primary?.id || "",
+    workGroupName: primary?.name || "",
+  };
+}
+
+function toggleProcessWorkGroup(process: HiringProcess, group: WorkGroup, checked: boolean): HiringProcess {
+  const id = group._id || "";
+  const name = group.name || group.commercialName || "";
+  const logoUrl = group.logoUrl || "";
+  const current = getProcessWorkGroups(process).filter((item) => (id && item.id !== id) || (!id && item.name !== name));
+  const nextGroups = checked ? [...current, { id, name, logoUrl }] : current;
+  return ensurePrimaryWorkGroup({ ...process, workGroups: nextGroups });
+}
+
+function createProcessWithDefaultGroups(process: HiringProcess, user: SessionUser | null, groups: WorkGroup[]) {
+  if (canAssignProcessGroups(user)) return ensurePrimaryWorkGroup(process);
+  const userGroups = user?.workGroups || [];
+  if (userGroups.length) return ensurePrimaryWorkGroup({ ...process, workGroups: userGroups });
+  if (groups.length === 1) {
+    const group = groups[0];
+    return ensurePrimaryWorkGroup({ ...process, workGroups: [{ id: group._id || "", name: group.name || group.commercialName || "", logoUrl: group.logoUrl || "" }] });
+  }
+  return ensurePrimaryWorkGroup(process);
+}
+
 const inputClass =
   "w-full rounded-md border border-slate-300 bg-white px-4 py-3 text-slate-900 outline-none transition placeholder:text-slate-400 focus:border-[#218F93] focus:ring-4 focus:ring-[#33C3C9]/15";
+
+function fieldClass(readOnly: boolean) {
+  return readOnly
+    ? `${inputClass} cursor-default bg-slate-50 font-semibold text-slate-900 focus:border-slate-300 focus:ring-0`
+    : inputClass;
+}
 
 function Field({ label, children }: { label: string; children: React.ReactNode }) {
   return <label className="grid gap-2 text-sm font-semibold text-slate-700">{label}{children}</label>;

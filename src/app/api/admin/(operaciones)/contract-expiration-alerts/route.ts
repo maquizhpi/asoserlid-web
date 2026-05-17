@@ -82,7 +82,7 @@ function releaseContractStaff(workplaces: NonNullable<ContractDocument["workplac
 }
 
 function isRelevantForSession(contract: ContractDocument, session: { name?: string; email: string; roles: string[] }) {
-  if (session.roles.includes("administrator") || session.roles.includes("accounting")) return true;
+  if (session.roles.some((role) => ["administrator", "general_manager", "general_accountant", "general_secretary", "general_supervisor", "accounting"].includes(role))) return true;
   if (!session.roles.includes("supervisor")) return false;
   const identity = `${session.name || ""} ${session.email}`.toLowerCase();
   return getSupervisorNames(contract).some((name) => identity.includes(name.toLowerCase()) || name.toLowerCase().includes((session.name || "").toLowerCase()));
@@ -92,7 +92,7 @@ async function createNotifications(db: Awaited<ReturnType<typeof getDb>>, contra
   for (const contract of contracts) {
     const autoClosed = contract.endDate && contract.endDate < today;
     const title = autoClosed ? "Contrato finalizado automaticamente" : "Contrato proximo a finalizar";
-    const roles = ["administrator", "accounting", "supervisor"];
+    const roles = ["administrator", "general_manager", "general_accountant", "general_secretary", "general_supervisor", "accounting", "supervisor"];
     for (const role of roles) {
       const existing = await db.collection("notifications").findOne({
         title,

@@ -8,15 +8,17 @@ export type WorkGroupScope = {
   global: boolean;
   workGroupIds: string[];
   workGroupNames: string[];
+  workGroups: { id: string; name: string; logoUrl?: string }[];
 };
 
 const globalGroupPattern = /administrativ/i;
+const globalRoles = ["administrator", "general_manager", "general_accountant", "general_secretary", "general_supervisor", "accounting"];
 
 export async function getWorkGroupScope(): Promise<WorkGroupScope | null> {
   const user = await getCurrentAdminUser();
   if (!user) return null;
-  if (user.roles.includes("administrator") || user.roles.includes("accounting")) {
-    return { global: true, workGroupIds: [], workGroupNames: [] };
+  if (user.roles.some((role) => globalRoles.includes(role))) {
+    return { global: true, workGroupIds: [], workGroupNames: [], workGroups: [] };
   }
 
   const db = await getDb();
@@ -35,6 +37,7 @@ export async function getWorkGroupScope(): Promise<WorkGroupScope | null> {
   if (workerId) groupQueries.push({ legalRepresentativeId: workerId }, { supervisorId: workerId });
   if (documentId) groupQueries.push({ legalRepresentativeDocumentId: documentId });
   if (user.email) groupQueries.push({ companyEmail: user.email });
+  if (user.name) groupQueries.push({ legalRepresentativeName: { $regex: escapeRegex(user.name), $options: "i" } });
   if (worker?.workGroupId) groupQueries.push({ _id: new ObjectId(String(worker.workGroupId)) });
 
   const groups = groupQueries.length
@@ -43,22 +46,31 @@ export async function getWorkGroupScope(): Promise<WorkGroupScope | null> {
 
   const workGroupIds = new Set<string>();
   const workGroupNames = new Set<string>();
+  const workGroupsByKey = new Map<string, { id: string; name: string; logoUrl?: string }>();
   if (worker?.workGroupId) workGroupIds.add(String(worker.workGroupId));
   if (worker?.workGroupName) workGroupNames.add(String(worker.workGroupName));
+  if (worker?.workGroupId || worker?.workGroupName) {
+    const id = String(worker?.workGroupId || "");
+    const name = String(worker?.workGroupName || "");
+    workGroupsByKey.set(id || name, { id, name });
+  }
 
   for (const group of groups) {
-    if (group._id) workGroupIds.add(group._id.toString());
+    const id = group._id ? group._id.toString() : "";
     const name = String(group.commercialName || group.name || "");
+    if (id) workGroupIds.add(id);
     if (name) workGroupNames.add(name);
+    if (id || name) workGroupsByKey.set(id || name, { id, name, logoUrl: String(group.logoUrl || "") || undefined });
   }
 
   const hasAdministrativeGroup = Array.from(workGroupNames).some((name) => globalGroupPattern.test(name));
-  if (hasAdministrativeGroup) return { global: true, workGroupIds: [], workGroupNames: [] };
+  if (hasAdministrativeGroup) return { global: true, workGroupIds: [], workGroupNames: [], workGroups: [] };
 
   return {
     global: false,
     workGroupIds: Array.from(workGroupIds),
     workGroupNames: Array.from(workGroupNames),
+    workGroups: Array.from(workGroupsByKey.values()).filter((group) => group.id || group.name),
   };
 }
 
@@ -99,4 +111,8 @@ export function isRecordInWorkGroupScope(
   if (scope.global) return true;
   if (!record) return false;
   return filterByWorkGroup([record], scope, idFields, nameFields).length > 0;
+}
+
+function escapeRegex(value: string) {
+  return value.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
 }
