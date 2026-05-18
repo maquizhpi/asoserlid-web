@@ -5,10 +5,11 @@ import Link from "next/link";
 import { useRouter } from "next/navigation";
 import SystemShell from "@/components/system/SystemShell";
 import { roleLabels } from "@/lib/userRoles";
-import type { AdminOverviewItem, HiringProcess, UserRole } from "@/types/admin";
+import type { AdminOverviewItem, Client, HiringProcess, Machine, ServiceContract, SupplyKit, SupplyProduct, SupervisorReport, UserRole, Worker, WorkGroup } from "@/types/admin";
 
 type DashboardStats = {
   activeWorkers: number;
+  socios: number;
   todayReports: number;
   submittedReports: number;
   approvedReports: number;
@@ -28,6 +29,28 @@ type DashboardStats = {
   monthlyKits: number;
   activeNotifications: number;
   areaIndicators: { area: string; total: number; late: number; upcoming: number }[];
+  activeContracts: number;
+  companyStats: CompanyStats[];
+};
+
+type CompanyStats = {
+  key: string;
+  name: string;
+  activeWorkers: number;
+  socios: number;
+  activeClients: number;
+  activeContracts: number;
+  todayReports: number;
+  pendingApprovals: number;
+  absences: number;
+  overtimeHours: number;
+  fines: number;
+  activeMachines: number;
+  supplyProducts: number;
+  monthlyKits: number;
+  activeProcesses: number;
+  lateProcesses: number;
+  upcomingProcesses: number;
 };
 
 type SessionUser = {
@@ -38,6 +61,7 @@ type SessionUser = {
 };
 
 const redirectStorageKey = "asoserlid_admin_redirect_after_login";
+const executiveDashboardRoles: UserRole[] = ["administrator", "general_manager", "general_secretary", "general_accountant"];
 
 export default function AdminPage() {
   const router = useRouter();
@@ -53,7 +77,9 @@ export default function AdminPage() {
     const canAccess = (keys: string[]) => user.roles.includes("administrator") || keys.some((key) => visibleKeys.has(key) || user.moduleAccess.includes(key));
     const [
       workersData,
+      workGroupsData,
       clientsData,
+      contractsData,
       reportsData,
       processesData,
       machinesData,
@@ -62,7 +88,9 @@ export default function AdminPage() {
       notificationsData,
     ] = await Promise.all([
       fetchJsonIf(canAccess(["workers", "labor-history"]), "/api/admin/workers"),
+      fetchJsonIf(canAccess(["work-groups"]), "/api/admin/work-groups"),
       fetchJsonIf(canAccess(["clients", "contracts-shifts"]), "/api/admin/clients"),
+      fetchJsonIf(canAccess(["contracts-shifts"]), "/api/admin/contracts"),
       fetchJsonIf(canAccess(["supervisor-daily-report", "report-approvals", "dashboard-supervisor", "dashboard-accounting", "accounting", "payment-calculation", "exports"]), "/api/admin/supervisor-reports"),
       fetchJsonIf(canAccess(["hiring-processes", "process-calendar", "notifications"]), "/api/admin/hiring-processes"),
       fetchJsonIf(canAccess(["machines"]), "/api/admin/machines"),
@@ -71,10 +99,29 @@ export default function AdminPage() {
       fetchJsonIf(canAccess(["notifications"]), "/api/admin/notifications"),
     ]);
     const today = new Date().toISOString().slice(0, 10);
-    const reports = reportsData.items || [];
+    const workers: Worker[] = workersData.items || [];
+    const workGroups: WorkGroup[] = workGroupsData.items || [];
+    const clients: Client[] = clientsData.items || [];
+    const contracts: ServiceContract[] = contractsData.items || [];
+    const reports: SupervisorReport[] = reportsData.items || [];
     const processes: HiringProcess[] = processesData.items || [];
+    const machines: Machine[] = machinesData.items || machinesData.machines || [];
+    const supplyProducts: SupplyProduct[] = supplyProductsData.items || [];
+    const supplyKits: SupplyKit[] = supplyKitsData.items || [];
     const activeProcesses = processes.filter((process) => !["completed", "cancelled"].includes(process.status));
     const areaMap = new Map<string, { area: string; total: number; late: number; upcoming: number }>();
+    const companyStats = buildCompanyStats({
+      workGroups,
+      workers,
+      clients,
+      contracts,
+      reports,
+      processes: activeProcesses,
+      machines,
+      supplyProducts,
+      supplyKits,
+      today,
+    });
 
     activeProcesses.forEach((process) => {
       const area = process.area || "Sin area";
@@ -87,8 +134,10 @@ export default function AdminPage() {
     });
 
     setDashboardStats({
-      activeWorkers: (workersData.items || []).filter((worker: { status?: string }) => worker.status === "active").length,
-      activeClients: (clientsData.items || []).filter((client: { status?: string }) => client.status === "active").length,
+      activeWorkers: workers.filter((worker) => worker.status === "active").length,
+      socios: workers.filter((worker) => worker.socio === "Si").length,
+      activeClients: clients.filter((client) => client.status === "active").length,
+      activeContracts: contracts.filter((contract) => contract.status === "active").length,
       todayReports: reports.filter((report: { date?: string }) => report.date === today).length,
       submittedReports: reports.filter((report: { reportStatus?: string }) => report.reportStatus === "submitted").length,
       approvedReports: reports.filter((report: { reportStatus?: string }) => report.reportStatus === "approved").length,
@@ -105,11 +154,12 @@ export default function AdminPage() {
         const days = daysUntil(process.dueDate, today);
         return days >= 0 && days <= 7;
       }).length,
-      activeMachines: (machinesData.items || machinesData.machines || []).filter((machine: { status?: string }) => machine.status !== "inactive").length,
-      supplyProducts: (supplyProductsData.items || []).length,
-      monthlyKits: (supplyKitsData.items || []).length,
+      activeMachines: machines.filter((machine) => machine.status !== "inactive").length,
+      supplyProducts: supplyProducts.length,
+      monthlyKits: supplyKits.length,
       activeNotifications: (notificationsData.items || []).filter((notification: { status?: string }) => notification.status === "active").length,
       areaIndicators: Array.from(areaMap.values()).sort((a, b) => b.total - a.total),
+      companyStats,
     });
   }, []);
 
@@ -262,6 +312,8 @@ export default function AdminPage() {
     );
   }
 
+  const canViewExecutiveDashboard = Boolean(sessionUser?.roles.some((role) => executiveDashboardRoles.includes(role)));
+
   return (
     <SystemShell title="Sistema Integrado de Trabajo" subtitle="Dashboard principal y funciones asignadas a tu usuario.">
       {status && <p className="mb-5 rounded-md border border-slate-200 bg-white px-4 py-3 text-sm text-slate-700">{status}</p>}
@@ -276,10 +328,12 @@ export default function AdminPage() {
         </div>
       </section>
 
-      {dashboardStats && (
+      {dashboardStats && canViewExecutiveDashboard && (
         <section className="mb-6 grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
           <StatCard label="Trabajadores activos" value={String(dashboardStats.activeWorkers)} tone="blue" />
+          <StatCard label="Socios" value={String(dashboardStats.socios)} tone="green" />
           <StatCard label="Clientes activos" value={String(dashboardStats.activeClients)} tone="green" />
+          <StatCard label="Contratos activos" value={String(dashboardStats.activeContracts)} tone="blue" />
           <StatCard label="Asistencia hoy" value={String(dashboardStats.todayReports)} tone="cyan" />
           <StatCard label="Pendientes aprobacion" value={String(dashboardStats.pendingApprovals)} tone={dashboardStats.pendingApprovals ? "warning" : "green"} />
           <StatCard label="Reportes enviados" value={String(dashboardStats.submittedReports)} tone="blue" />
@@ -297,12 +351,25 @@ export default function AdminPage() {
         </section>
       )}
 
-      {dashboardStats && (
+      {dashboardStats && canViewExecutiveDashboard && (
         <section className="mb-6 grid gap-6 xl:grid-cols-[1fr_24rem]">
-          <div className="grid gap-3 sm:grid-cols-3">
-            <StatCard label="Procesos activos" value={String(dashboardStats.activeProcesses)} />
-            <StatCard label="Procesos vencidos" value={String(dashboardStats.lateProcesses)} tone={dashboardStats.lateProcesses ? "danger" : "normal"} />
-            <StatCard label="Vencen en 7 dias" value={String(dashboardStats.upcomingProcesses)} tone={dashboardStats.upcomingProcesses ? "warning" : "normal"} />
+          <div className="rounded-lg border border-slate-200 bg-white p-4 shadow-sm">
+            <div className="grid gap-3 sm:grid-cols-3">
+              <StatCard label="Procesos activos" value={String(dashboardStats.activeProcesses)} />
+              <StatCard label="Procesos vencidos" value={String(dashboardStats.lateProcesses)} tone={dashboardStats.lateProcesses ? "danger" : "normal"} />
+              <StatCard label="Vencen en 7 dias" value={String(dashboardStats.upcomingProcesses)} tone={dashboardStats.upcomingProcesses ? "warning" : "normal"} />
+            </div>
+            <div className="mt-5 grid gap-4 lg:grid-cols-2">
+              <MetricBars
+                title="Trabajadores por empresa"
+                rows={dashboardStats.companyStats.map((company) => ({ key: company.key, label: company.name, value: company.activeWorkers }))}
+              />
+              <MetricBars
+                title="Reportes pendientes por empresa"
+                rows={dashboardStats.companyStats.map((company) => ({ key: company.key, label: company.name, value: company.pendingApprovals }))}
+                tone="warning"
+              />
+            </div>
           </div>
           <aside className="rounded-lg border border-slate-200 bg-white p-4 shadow-sm">
             <h2 className="text-xs font-bold uppercase tracking-[0.1em] text-slate-500">Indicadores por area</h2>
@@ -316,6 +383,26 @@ export default function AdminPage() {
               {dashboardStats.areaIndicators.length === 0 && <p className="text-sm text-slate-500">Sin procesos activos.</p>}
             </div>
           </aside>
+        </section>
+      )}
+
+      {dashboardStats && canViewExecutiveDashboard && (
+        <section className="mb-6 rounded-lg border border-slate-200 bg-white p-4 shadow-sm">
+          <div className="flex flex-col gap-2 sm:flex-row sm:items-end sm:justify-between">
+            <div>
+              <h2 className="text-lg font-bold text-[#173C61]">Metricas por empresa</h2>
+              <p className="mt-1 text-sm text-slate-500">Cada empresa creada en el submodulo Empresas aparece automaticamente aqui.</p>
+            </div>
+            <span className="rounded-full bg-[#E6F8F9] px-3 py-1 text-xs font-bold text-[#173C61]">
+              {dashboardStats.companyStats.length} empresa(s)
+            </span>
+          </div>
+          <div className="mt-4 space-y-3">
+            {dashboardStats.companyStats.map((company, index) => (
+              <CompanyMetrics key={`${company.key}-${index}`} company={company} />
+            ))}
+            {dashboardStats.companyStats.length === 0 && <p className="rounded-md bg-slate-50 px-4 py-3 text-sm text-slate-500">Sin empresas registradas.</p>}
+          </div>
         </section>
       )}
 
@@ -338,6 +425,203 @@ function StatCard({ label, value, tone = "normal" }: { label: string; value: str
       <p className="mt-2 text-2xl font-bold">{value}</p>
     </div>
   );
+}
+
+function CompanyMetrics({ company }: { company: CompanyStats }) {
+  return (
+    <details className="rounded-lg border border-slate-200 bg-white">
+      <summary className="cursor-pointer list-none px-4 py-3">
+        <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+          <div>
+            <h3 className="font-bold text-[#173C61]">{company.name}</h3>
+            <p className="mt-1 text-xs font-semibold text-slate-500">
+              {company.activeWorkers} trabajadores | {company.activeClients} clientes | {company.activeContracts} contratos
+            </p>
+          </div>
+          <span className="rounded-md bg-slate-100 px-3 py-2 text-xs font-bold text-slate-600">Abrir metricas</span>
+        </div>
+      </summary>
+      <div className="border-t border-slate-100 p-4">
+        <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
+          <StatCard label="Trabajadores activos" value={String(company.activeWorkers)} tone="blue" />
+          <StatCard label="Socios" value={String(company.socios)} tone="green" />
+          <StatCard label="Clientes activos" value={String(company.activeClients)} tone="green" />
+          <StatCard label="Contratos activos" value={String(company.activeContracts)} tone="blue" />
+          <StatCard label="Asistencia hoy" value={String(company.todayReports)} tone="cyan" />
+          <StatCard label="Pendientes aprobacion" value={String(company.pendingApprovals)} tone={company.pendingApprovals ? "warning" : "green"} />
+          <StatCard label="Faltas" value={String(company.absences)} tone={company.absences ? "danger" : "normal"} />
+          <StatCard label="Horas extras" value={company.overtimeHours.toFixed(2)} tone="green" />
+          <StatCard label="Multas" value={`$ ${company.fines.toFixed(2)}`} tone={company.fines ? "danger" : "normal"} />
+          <StatCard label="Equipos activos" value={String(company.activeMachines)} tone="blue" />
+          <StatCard label="Productos insumos" value={String(company.supplyProducts)} tone="green" />
+          <StatCard label="Kits mensuales" value={String(company.monthlyKits)} tone="cyan" />
+        </div>
+        <div className="mt-4 grid gap-3 sm:grid-cols-3">
+          <StatCard label="Procesos activos" value={String(company.activeProcesses)} />
+          <StatCard label="Procesos vencidos" value={String(company.lateProcesses)} tone={company.lateProcesses ? "danger" : "normal"} />
+          <StatCard label="Vencen en 7 dias" value={String(company.upcomingProcesses)} tone={company.upcomingProcesses ? "warning" : "normal"} />
+        </div>
+      </div>
+    </details>
+  );
+}
+
+function MetricBars({ title, rows, tone = "blue" }: { title: string; rows: { key: string; label: string; value: number }[]; tone?: "blue" | "warning" }) {
+  const max = Math.max(...rows.map((row) => row.value), 1);
+  const barClass = tone === "warning" ? "bg-amber-500" : "bg-[#218F93]";
+  return (
+    <section>
+      <h3 className="text-xs font-bold uppercase tracking-[0.1em] text-slate-500">{title}</h3>
+      <div className="mt-3 space-y-3">
+        {rows.slice(0, 8).map((row, index) => (
+          <div key={`${row.key}-${index}`} className="grid gap-1">
+            <div className="flex items-center justify-between gap-3 text-xs">
+              <span className="truncate font-semibold text-[#173C61]">{row.label}</span>
+              <span className="font-bold text-slate-600">{row.value}</span>
+            </div>
+            <div className="h-2 overflow-hidden rounded-full bg-slate-100">
+              <div className={`h-full rounded-full ${barClass}`} style={{ width: `${Math.max(4, (row.value / max) * 100)}%` }} />
+            </div>
+          </div>
+        ))}
+        {rows.length === 0 && <p className="text-sm text-slate-500">Sin datos.</p>}
+      </div>
+    </section>
+  );
+}
+
+function buildCompanyStats({
+  workGroups,
+  workers,
+  clients,
+  contracts,
+  reports,
+  processes,
+  machines,
+  supplyProducts,
+  supplyKits,
+  today,
+}: {
+  workGroups: WorkGroup[];
+  workers: Worker[];
+  clients: Client[];
+  contracts: ServiceContract[];
+  reports: SupervisorReport[];
+  processes: HiringProcess[];
+  machines: Machine[];
+  supplyProducts: SupplyProduct[];
+  supplyKits: SupplyKit[];
+  today: string;
+}) {
+  const companies = new Map<string, CompanyStats>();
+  const clientCompanyKeys = new Map<string, string>();
+  const contractCompanyKeys = new Map<string, string>();
+
+  const ensureCompany = (key: string, name: string) => {
+    const normalizedKey = key || normalizeCompanyKey(name) || "sin-empresa";
+    const normalizedName = name || "Sin empresa";
+    const current = companies.get(normalizedKey);
+    if (current) return current;
+
+    const next: CompanyStats = {
+      key: normalizedKey,
+      name: normalizedName,
+      activeWorkers: 0,
+      socios: 0,
+      activeClients: 0,
+      activeContracts: 0,
+      todayReports: 0,
+      pendingApprovals: 0,
+      absences: 0,
+      overtimeHours: 0,
+      fines: 0,
+      activeMachines: 0,
+      supplyProducts: 0,
+      monthlyKits: 0,
+      activeProcesses: 0,
+      lateProcesses: 0,
+      upcomingProcesses: 0,
+    };
+    companies.set(normalizedKey, next);
+    return next;
+  };
+
+  workGroups.forEach((group) => {
+    ensureCompany(companyKey(group._id, group.name), group.commercialName || group.name || "Sin empresa");
+  });
+
+  clients.forEach((client) => {
+    const company = ensureCompany(companyKey(client.workGroupId, client.workGroupName), client.workGroupName || "Sin empresa");
+    if (client._id) clientCompanyKeys.set(client._id, company.key);
+    if (client.name) clientCompanyKeys.set(client.name, company.key);
+    if (client.status === "active") company.activeClients += 1;
+  });
+
+  contracts.forEach((contract) => {
+    const company = ensureCompany(companyKey(contract.workGroupId, contract.workGroupName), contract.workGroupName || "Sin empresa");
+    if (contract._id) contractCompanyKeys.set(contract._id, company.key);
+    if (contract.clientName) clientCompanyKeys.set(contract.clientName, company.key);
+    if (contract.status === "active") company.activeContracts += 1;
+  });
+
+  workers.forEach((worker) => {
+    const company = ensureCompany(companyKey(worker.workGroupId, worker.workGroupName), worker.workGroupName || "Sin empresa");
+    if (worker.status === "active") company.activeWorkers += 1;
+    if (worker.socio === "Si") company.socios += 1;
+  });
+
+  reports.forEach((report) => {
+    const company = ensureCompany(companyKey(report.workGroupId, report.workGroupName), report.workGroupName || "Sin empresa");
+    if (report.date === today) company.todayReports += 1;
+    if (["draft", "submitted", "observed"].includes(report.reportStatus || "draft")) company.pendingApprovals += 1;
+    if (report.attendanceStatus === "absent") company.absences += 1;
+    company.overtimeHours += Number(report.overtimeHours || 0);
+    company.fines += Number(report.fineAmount || 0);
+  });
+
+  machines.forEach((machine) => {
+    const company = ensureCompany(companyKey(machine.ownerWorkGroupId, machine.ownerWorkGroupName), machine.ownerWorkGroupName || "Sin empresa");
+    if (machine.status !== "inactive") company.activeMachines += 1;
+  });
+
+  supplyProducts.forEach((product) => {
+    const company = ensureCompany(companyKey(product.workGroupId, product.workGroupName), product.workGroupName || "Sin empresa");
+    company.supplyProducts += 1;
+  });
+
+  supplyKits.forEach((kit) => {
+    const key = kit.contractId ? contractCompanyKeys.get(kit.contractId) : undefined;
+    const fallbackKey = key || clientCompanyKeys.get(kit.clientName);
+    const company = fallbackKey ? companies.get(fallbackKey) || ensureCompany(fallbackKey, kit.clientName) : ensureCompany("", kit.clientName || "Sin empresa");
+    company.monthlyKits += 1;
+  });
+
+  processes.forEach((process) => {
+    const processCompanyKeys = process.workGroups?.length
+      ? process.workGroups.map((group) => companyKey(group.id, group.name))
+      : [companyKey(process.workGroupId, process.workGroupName)];
+    const uniqueKeys = Array.from(new Set(processCompanyKeys.filter(Boolean)));
+    const keys = uniqueKeys.length ? uniqueKeys : ["sin-empresa"];
+    const days = daysUntil(process.dueDate, today);
+
+    keys.forEach((key) => {
+      const name = process.workGroups?.find((group) => companyKey(group.id, group.name) === key)?.name || process.workGroupName || "Sin empresa";
+      const company = ensureCompany(key, name);
+      company.activeProcesses += 1;
+      company.lateProcesses += days < 0 ? 1 : 0;
+      company.upcomingProcesses += days >= 0 && days <= 7 ? 1 : 0;
+    });
+  });
+
+  return Array.from(companies.values()).sort((a, b) => b.activeWorkers + b.activeClients + b.activeContracts - (a.activeWorkers + a.activeClients + a.activeContracts));
+}
+
+function companyKey(id?: string, name?: string) {
+  return id || normalizeCompanyKey(name || "");
+}
+
+function normalizeCompanyKey(value: string) {
+  return value.trim().toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g, "").replace(/[^a-z0-9]+/g, "-").replace(/^-+|-+$/g, "");
 }
 
 function daysUntil(date: string, today: string) {

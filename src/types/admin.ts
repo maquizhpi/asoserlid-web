@@ -204,6 +204,7 @@ export type Worker = {
   bankName?: string;
   bankAccountType?: string;
   bankAccountNumber?: string;
+  socio?: "Si" | "No";
   status: "active" | "inactive";
   documents?: string;
   assignedClientId?: string;

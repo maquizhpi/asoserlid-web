@@ -1,6 +1,8 @@
 import { adminModules } from "@/lib/adminModules";
 import type { UserRole } from "@/types/admin";
 
+const allWorkersReadRoles: UserRole[] = ["administrator", "general_manager", "general_accountant", "general_secretary", "general_supervisor"];
+
 export const roleAccess: Record<UserRole, string[]> = {
   administrator: adminModules.map((module) => module.key),
   general_manager: adminModules.map((module) => module.key).filter((key) => !["roles", "users", "backups"].includes(key)),
@@ -25,5 +27,6 @@ export function getEffectiveModuleAccess(roles: UserRole[], moduleAccess: string
   const allowedModules = new Set(adminModules.map((module) => module.key));
   const selectedModules = moduleAccess.filter((module) => allowedModules.has(module));
   if (roles.includes("administrator")) return getDefaultAccessForRoles(["administrator"]);
-  return Array.from(new Set(selectedModules));
+  const requiredByRole = roles.some((role) => allWorkersReadRoles.includes(role)) ? ["workers"] : [];
+  return Array.from(new Set([...selectedModules, ...requiredByRole]));
 }

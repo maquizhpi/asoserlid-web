@@ -35,7 +35,7 @@ export default function ImportCsvModal({ title, endpoint, templateHref, onImport
       return;
     }
 
-    setStatus(`Importados: ${data.imported || 0}. Duplicados omitidos: ${data.skipped || 0}.`);
+    setStatus(`Importados: ${data.imported || 0}. Actualizados: ${data.updated || 0}. Duplicados omitidos: ${data.skipped || 0}.`);
     setErrors(data.errors || []);
     await onImported();
   }

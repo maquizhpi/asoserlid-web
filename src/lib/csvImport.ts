@@ -8,12 +8,20 @@ export type ImportResult = {
   errors: string[];
 };
 
-export async function spreadsheetResponse(filename: string, headers: string[]) {
+export async function spreadsheetResponse(filename: string, headers: string[], exampleRows: string[][] = []) {
   const workbook = new ExcelJS.Workbook();
   const worksheet = workbook.addWorksheet("Datos");
   worksheet.addRow(headers);
   worksheet.getRow(1).font = { bold: true };
   worksheet.columns = headers.map((header) => ({ header, key: header, width: Math.max(header.length + 4, 18) }));
+
+  if (exampleRows.length) {
+    const exampleWorksheet = workbook.addWorksheet("Ejemplo");
+    exampleWorksheet.addRow(headers);
+    exampleRows.forEach((row) => exampleWorksheet.addRow(row));
+    exampleWorksheet.getRow(1).font = { bold: true };
+    exampleWorksheet.columns = headers.map((header) => ({ header, key: header, width: Math.max(header.length + 4, 18) }));
+  }
 
   const buffer = Buffer.from(await workbook.xlsx.writeBuffer());
   const body = buffer.buffer.slice(buffer.byteOffset, buffer.byteOffset + buffer.byteLength) as ArrayBuffer;

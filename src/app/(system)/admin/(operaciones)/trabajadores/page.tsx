@@ -19,6 +19,7 @@ const emptyWorker: Worker = {
   bankName: "",
   bankAccountType: "",
   bankAccountNumber: "",
+  socio: "No",
   status: "active",
   documents: "",
   assignedClientId: "",
@@ -38,6 +39,7 @@ function createEmptyWorker(): Worker {
 }
 
 type PanelMode = "list" | "form";
+type ExportFilters = { workGroupId: string; status: string; socio: string; assignedContractId: string; format: "pdf" | "excel" };
 
 export default function WorkersPage() {
   const [workers, setWorkers] = useState<Worker[]>([]);
@@ -55,14 +57,16 @@ export default function WorkersPage() {
   const [consulting, setConsulting] = useState(false);
   const [search, setSearch] = useState("");
   const [filters, setFilters] = useState({ status: "", workGroupId: "", assignedClientId: "" });
+  const [exportOpen, setExportOpen] = useState(false);
+  const [exportFilters, setExportFilters] = useState<ExportFilters>({ workGroupId: "", status: "", socio: "", assignedContractId: "", format: "pdf" });
 
   const selectedWorker = useMemo(
     () => workers.find((worker) => worker._id === selectedId),
     [workers, selectedId]
   );
   const selectedGroup = useMemo(
-    () => workGroups.find((group) => group._id === form.workGroupId),
-    [form.workGroupId, workGroups]
+    () => findWorkGroupForWorker(form, workGroups),
+    [form, workGroups]
   );
   const visibleWorkers = useMemo(() => {
     const term = search.trim().toLowerCase();
@@ -82,19 +86,19 @@ export default function WorkersPage() {
 
       if (term && !text.includes(term)) return false;
       if (filters.status && worker.status !== filters.status) return false;
-      if (filters.workGroupId && worker.workGroupId !== filters.workGroupId) return false;
+      if (filters.workGroupId && !workerMatchesWorkGroup(worker, filters.workGroupId, workGroups)) return false;
       if (filters.assignedClientId && worker.assignedClientId !== filters.assignedClientId) return false;
       return true;
     });
-  }, [filters, search, workers]);
+  }, [filters, search, workGroups, workers]);
 
   useEffect(() => {
     loadWorkers();
   }, []);
 
   useEffect(() => {
-    setForm(selectedWorker || createEmptyWorker());
-  }, [selectedWorker]);
+    setForm(selectedWorker ? normalizeWorkerCompany(selectedWorker, workGroups) : createEmptyWorker());
+  }, [selectedWorker, workGroups]);
 
   useEffect(() => {
     if (!selectedWorker && workers[0]?._id && workerMode === "list") {
@@ -120,7 +124,7 @@ export default function WorkersPage() {
     if (groupsRes.ok) {
       const items = (groupsData.items || []) as WorkGroup[];
       setWorkGroups(items);
-      setGroups(items.map((group) => ({ value: group._id || "", label: group.name })));
+      setGroups(items.map((group) => ({ value: group._id || group.name, label: group.commercialName || group.name })));
     }
     if (clientsRes.ok) {
       setClients(((clientsData.items || []) as Client[]).map((client) => ({ value: client._id || "", label: client.name })));
@@ -189,7 +193,7 @@ function startNewWorker() {
 
   function editWorker(worker: Worker) {
     setSelectedId(worker._id || null);
-    setForm(worker);
+    setForm(normalizeWorkerCompany(worker, workGroups));
     setWorkerMode("form");
   }
 
@@ -254,6 +258,16 @@ function startNewWorker() {
     setSelectedId(null);
     setWorkerMode("list");
     await loadWorkers();
+  }
+
+  function exportFilteredWorkersPdf() {
+    const exportWorkers = getWorkersForExport(workers, exportFilters, workGroups, contracts);
+    if (exportFilters.format === "excel") {
+      downloadWorkersCsv(exportWorkers, "trabajadores-filtrados.csv");
+    } else {
+      openPrintWindow(buildWorkersReportHtml(exportWorkers, "Reporte PDF de trabajadores", getExportFilterSummary(exportFilters, groups, contracts)));
+    }
+    setExportOpen(false);
   }
 
   async function saveTalentProfile(worker: Worker, talentProfile: TalentHumanProfile) {
@@ -327,12 +341,17 @@ function startNewWorker() {
             </button>
           </div>
           <div className="mb-4">
-            <ImportCsvModal
-              title="Importar trabajadores"
-              endpoint="/api/admin/imports/workers"
-              templateHref="/api/admin/imports/workers"
-              onImported={loadWorkers}
-            />
+            <div className="grid gap-2 sm:grid-cols-2">
+              <ImportCsvModal
+                title="Importar trabajadores"
+                endpoint="/api/admin/imports/workers"
+                templateHref="/api/admin/imports/workers"
+                onImported={loadWorkers}
+              />
+              <button type="button" onClick={() => setExportOpen(true)} className="rounded-md border border-[#173C61] bg-white px-4 py-3 font-semibold text-[#173C61] hover:bg-[#E6F8F9]">
+                Exportar
+              </button>
+            </div>
           </div>
 
           <div className="mb-4 grid gap-3 rounded-md border border-slate-200 bg-slate-50 p-3">
@@ -342,7 +361,7 @@ function startNewWorker() {
               <option value="inactive">Inactivo</option>
             </select>
             <select className={inputClass} value={filters.workGroupId} onChange={(e) => setFilters({ ...filters, workGroupId: e.target.value })}>
-              <option value="">Todos los grupos</option>
+              <option value="">Todas las empresas</option>
               {groups.map((group) => <option key={group.value} value={group.value}>{group.label}</option>)}
             </select>
             <select className={inputClass} value={filters.assignedClientId} onChange={(e) => setFilters({ ...filters, assignedClientId: e.target.value })}>
@@ -414,6 +433,17 @@ function startNewWorker() {
           onSave={(delivery) => saveEppDelivery(eppWorker, delivery)}
         />
       )}
+      {exportOpen && (
+        <ExportWorkersModal
+          filters={exportFilters}
+          groups={groups}
+          contracts={contracts}
+          total={getWorkersForExport(workers, exportFilters, workGroups, contracts).length}
+          onChange={setExportFilters}
+          onClose={() => setExportOpen(false)}
+          onExport={exportFilteredWorkersPdf}
+        />
+      )}
     </SystemModulePage>
   );
 }
@@ -454,10 +484,11 @@ function WorkerDetail({ worker, onEdit, onNew, onOpenProfile, onOpenEpp }: { wor
         <Info label="Estado" value={worker.status === "active" ? "Activo" : "Inactivo"} />
         <Info label="Contacto" value={worker.phone} />
         <Info label="Correo" value={worker.email || "-"} />
-        <Info label="Grupo de trabajo" value={worker.workGroupName || "-"} />
+        <Info label="Empresa" value={worker.workGroupName || "-"} />
         <Info label="Banco" value={worker.bankName || "-"} />
         <Info label="Tipo de cuenta" value={worker.bankAccountType || "-"} />
         <Info label="Numero de cuenta" value={worker.bankAccountNumber || "-"} />
+        <Info label="Socio" value={worker.socio || "No"} />
         <Info label="Cliente" value={worker.assignedClient || "-"} />
         <Info label="Contrato / turno" value={worker.assignedContract || "-"} />
         <Info label="Area / lugar" value={worker.assignedArea || "-"} />
@@ -465,6 +496,88 @@ function WorkerDetail({ worker, onEdit, onNew, onOpenProfile, onOpenEpp }: { wor
         <Info label="Documentos / validacion" value={worker.documents || "-"} />
       </dl>
     </section>
+  );
+}
+
+function ExportWorkersModal({
+  filters,
+  groups,
+  contracts,
+  total,
+  onChange,
+  onClose,
+  onExport,
+}: {
+  filters: ExportFilters;
+  groups: SelectOption[];
+  contracts: SelectOption[];
+  total: number;
+  onChange: (filters: ExportFilters) => void;
+  onClose: () => void;
+  onExport: () => void;
+}) {
+  return (
+    <div className="fixed inset-0 z-50 grid place-items-center bg-slate-950/50 px-4">
+      <section className="w-full max-w-xl rounded-lg border border-slate-200 bg-white p-5 shadow-xl">
+        <div className="flex items-start justify-between gap-4">
+          <div>
+            <h2 className="text-xl font-bold text-[#173C61]">Exportar trabajadores</h2>
+            <p className="mt-1 text-sm text-slate-600">Selecciona los filtros para generar el PDF.</p>
+          </div>
+          <button type="button" onClick={onClose} className="rounded-md border border-slate-200 px-3 py-1 text-sm font-bold text-slate-600 hover:bg-slate-50">
+            Cerrar
+          </button>
+        </div>
+
+        <div className="mt-5 grid gap-4 sm:grid-cols-2">
+          <Field label="Formato">
+            <select className={inputClass} value={filters.format} onChange={(e) => onChange({ ...filters, format: e.target.value as ExportFilters["format"] })}>
+              <option value="pdf">PDF</option>
+              <option value="excel">Excel</option>
+            </select>
+          </Field>
+          <Field label="Empresa">
+            <select className={inputClass} value={filters.workGroupId} onChange={(e) => onChange({ ...filters, workGroupId: e.target.value })}>
+              <option value="">Todas</option>
+              {groups.map((group) => <option key={group.value} value={group.value}>{group.label}</option>)}
+            </select>
+          </Field>
+          <Field label="Estado">
+            <select className={inputClass} value={filters.status} onChange={(e) => onChange({ ...filters, status: e.target.value })}>
+              <option value="">Todos</option>
+              <option value="active">Activo</option>
+              <option value="inactive">Inactivo</option>
+            </select>
+          </Field>
+          <Field label="Socio">
+            <select className={inputClass} value={filters.socio} onChange={(e) => onChange({ ...filters, socio: e.target.value })}>
+              <option value="">Todos</option>
+              <option value="Si">Si</option>
+              <option value="No">No</option>
+            </select>
+          </Field>
+          <Field label="Contrato">
+            <select className={inputClass} value={filters.assignedContractId} onChange={(e) => onChange({ ...filters, assignedContractId: e.target.value })}>
+              <option value="">Todos</option>
+              {contracts.map((contract) => <option key={contract.value} value={contract.value}>{contract.label}</option>)}
+            </select>
+          </Field>
+        </div>
+
+        <p className="mt-4 rounded-md border border-slate-200 bg-slate-50 px-4 py-3 text-sm font-semibold text-slate-700">
+          Se exportaran {total} trabajador(es).
+        </p>
+
+        <div className="mt-5 flex flex-wrap gap-3">
+          <button type="button" onClick={onExport} className="rounded-md bg-[#173C61] px-5 py-3 font-semibold text-white hover:bg-[#218F93]">
+            Exportar
+          </button>
+          <button type="button" onClick={() => onChange({ workGroupId: "", status: "", socio: "", assignedContractId: "", format: "pdf" })} className="rounded-md border border-slate-200 px-5 py-3 font-semibold text-slate-700 hover:bg-slate-50">
+            Limpiar
+          </button>
+        </div>
+      </section>
+    </div>
   );
 }
 
@@ -776,6 +889,12 @@ function WorkerForm({
         <Field label="Numero de cuenta">
           <input className={inputClass} value={form.bankAccountNumber || ""} onChange={(e) => onChange({ ...form, bankAccountNumber: e.target.value })} />
         </Field>
+        <Field label="Socio">
+          <select className={inputClass} value={form.socio || "No"} onChange={(e) => onChange({ ...form, socio: e.target.value as Worker["socio"] })}>
+            <option value="No">No</option>
+            <option value="Si">Si</option>
+          </select>
+        </Field>
         <Field label="Estado">
           <select className={inputClass} value={form.status} onChange={(e) => onChange({ ...form, status: e.target.value as Worker["status"] })}>
             <option value="active">Activo</option>
@@ -783,13 +902,13 @@ function WorkerForm({
           </select>
         </Field>
         <SearchableSelect
-          label="Grupo de trabajo"
+          label="Empresa"
           value={form.workGroupId || ""}
           options={groups}
-          placeholder="Buscar grupo..."
+          placeholder="Buscar empresa..."
           onChange={(option) => onChange({ ...form, workGroupId: option?.value || "", workGroupName: option?.label || "" })}
         />
-        <Field label="Supervisor del grupo">
+        <Field label="Supervisor de la empresa">
           <input className={inputClass} value={selectedGroup?.supervisorName || "Sin supervisor asignado"} readOnly />
         </Field>
         <SearchableSelect
@@ -1015,6 +1134,146 @@ function defaultEppItems(): EppDeliveryItem[] {
     delivered: false,
     notes: "",
   }));
+}
+
+function normalizeWorkerCompany(worker: Worker, workGroups: WorkGroup[]) {
+  const group = findWorkGroupForWorker(worker, workGroups);
+  if (!group) return worker;
+  return {
+    ...worker,
+    workGroupId: worker.workGroupId || group._id || "",
+    workGroupName: worker.workGroupName || group.commercialName || group.name || "",
+  };
+}
+
+function findWorkGroupForWorker(worker: Pick<Worker, "workGroupId" | "workGroupName">, workGroups: WorkGroup[]) {
+  const byId = worker.workGroupId ? workGroups.find((group) => (group._id || group.name) === worker.workGroupId) : undefined;
+  if (byId) return byId;
+  const workerGroupKey = normalizeMatchKey(worker.workGroupName || "");
+  if (!workerGroupKey) return undefined;
+  return workGroups.find((group) => normalizeMatchKey(group.commercialName || "") === workerGroupKey || normalizeMatchKey(group.name || "") === workerGroupKey);
+}
+
+function workerMatchesWorkGroup(worker: Worker, filterValue: string, workGroups: WorkGroup[]) {
+  if (!filterValue) return true;
+  if (worker.workGroupId === filterValue || worker.workGroupName === filterValue) return true;
+  const selectedGroup = workGroups.find((group) => (group._id || group.name) === filterValue);
+  if (!selectedGroup) return false;
+  const workerGroupKey = normalizeMatchKey(worker.workGroupName || "");
+  return workerGroupKey === normalizeMatchKey(selectedGroup.name || "") || workerGroupKey === normalizeMatchKey(selectedGroup.commercialName || "");
+}
+
+function normalizeMatchKey(value: string) {
+  return value.trim().toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g, "").replace(/\s+/g, " ");
+}
+
+function getExportFilterSummary(filters: ExportFilters, groups: SelectOption[], contracts: SelectOption[]) {
+  return [
+    filters.workGroupId ? `Empresa: ${groups.find((group) => group.value === filters.workGroupId)?.label || filters.workGroupId}` : "Empresa: Todas",
+    filters.status ? `Estado: ${filters.status === "active" ? "Activo" : "Inactivo"}` : "Estado: Todos",
+    filters.socio ? `Socio: ${filters.socio}` : "Socio: Todos",
+    filters.assignedContractId ? `Contrato: ${contracts.find((contract) => contract.value === filters.assignedContractId)?.label || filters.assignedContractId}` : "Contrato: Todos",
+  ].join(" | ");
+}
+
+function getWorkersForExport(workers: Worker[], filters: ExportFilters, workGroups: WorkGroup[], contracts: SelectOption[]) {
+  const selectedContract = contracts.find((contract) => contract.value === filters.assignedContractId);
+  return workers.filter((worker) => {
+    if (filters.workGroupId && !workerMatchesWorkGroup(worker, filters.workGroupId, workGroups)) return false;
+    if (filters.status && worker.status !== filters.status) return false;
+    if (filters.socio && (worker.socio || "No") !== filters.socio) return false;
+    if (
+      filters.assignedContractId
+      && worker.assignedContractId !== filters.assignedContractId
+      && normalizeMatchKey(worker.assignedContract || "") !== normalizeMatchKey(selectedContract?.label || filters.assignedContractId)
+    ) return false;
+    return true;
+  });
+}
+
+function downloadWorkersCsv(workers: Worker[], filename: string) {
+  const rows = [
+    ["Cedula", "Nombres", "Apellidos", "Cargo", "Empresa", "Contacto", "Correo", "Socio", "Estado", "Cliente", "Contrato", "Area", "Horario"],
+    ...workers.map((worker) => [
+      worker.documentId,
+      worker.firstName,
+      worker.lastName,
+      worker.position,
+      worker.workGroupName || "",
+      worker.phone,
+      worker.email || "",
+      worker.socio || "No",
+      worker.status === "active" ? "Activo" : "Inactivo",
+      worker.assignedClient || "",
+      worker.assignedContract || "",
+      worker.assignedArea || "",
+      worker.assignedSchedule || "",
+    ]),
+  ];
+  const csv = `\uFEFF${rows.map((row) => row.map(csvCell).join(",")).join("\n")}`;
+  const blob = new Blob([csv], { type: "text/csv;charset=utf-8" });
+  const url = URL.createObjectURL(blob);
+  const link = document.createElement("a");
+  link.href = url;
+  link.download = filename;
+  document.body.appendChild(link);
+  link.click();
+  link.remove();
+  URL.revokeObjectURL(url);
+}
+
+function csvCell(value: string) {
+  return `"${String(value || "").replaceAll('"', '""')}"`;
+}
+
+function buildWorkersReportHtml(workers: Worker[], title: string, subtitle: string) {
+  const rows = workers.length
+    ? workers.map((worker, index) => `
+        <tr>
+          <td>${index + 1}</td>
+          <td>${escapeHtml(worker.documentId)}</td>
+          <td>${escapeHtml(`${worker.firstName} ${worker.lastName}`.trim())}</td>
+          <td>${escapeHtml(worker.position || "")}</td>
+          <td>${escapeHtml(worker.workGroupName || "")}</td>
+          <td>${escapeHtml(worker.phone || "")}</td>
+          <td>${escapeHtml(worker.email || "")}</td>
+          <td>${escapeHtml(worker.socio || "No")}</td>
+          <td>${worker.status === "active" ? "Activo" : "Inactivo"}</td>
+        </tr>
+      `).join("")
+    : `<tr><td colspan="9">Sin trabajadores para los filtros aplicados.</td></tr>`;
+
+  return `
+    <!doctype html>
+    <html>
+      <head>
+        <meta charset="utf-8" />
+        <title>${escapeHtml(title)}</title>
+        <style>
+          body { font-family: Arial, sans-serif; color: #0f172a; margin: 24px; font-size: 12px; }
+          h1 { margin: 0; color: #173C61; font-size: 20px; }
+          .subtitle { margin: 8px 0 16px; color: #475569; font-size: 12px; }
+          table { width: 100%; border-collapse: collapse; table-layout: fixed; }
+          th, td { border: 1px solid #cbd5e1; padding: 6px; text-align: left; vertical-align: top; word-wrap: break-word; }
+          th { background: #f1f5f9; color: #173C61; font-size: 11px; }
+          .meta { margin-bottom: 12px; font-weight: 700; color: #334155; }
+          @media print { body { margin: 14mm; } }
+        </style>
+      </head>
+      <body>
+        <h1>${escapeHtml(title)}</h1>
+        <p class="subtitle">${escapeHtml(subtitle)}</p>
+        <p class="meta">Total trabajadores: ${workers.length}</p>
+        <table>
+          <thead>
+            <tr><th>No.</th><th>Cedula</th><th>Trabajador</th><th>Cargo</th><th>Empresa</th><th>Contacto</th><th>Correo</th><th>Socio</th><th>Estado</th></tr>
+          </thead>
+          <tbody>${rows}</tbody>
+        </table>
+        <script>window.print();</script>
+      </body>
+    </html>
+  `;
 }
 
 function isValidDocumentId(value: string) {

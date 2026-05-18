@@ -231,7 +231,7 @@ const sidebarConfig: SidebarSection[] = [
     items: [
       { key: "users", title: "Usuarios", moduleKey: "users" },
       { key: "roles", title: "Roles y permisos", moduleKey: "roles" },
-      { key: "work-groups", title: "Grupos de trabajo", moduleKey: "work-groups" },
+      { key: "work-groups", title: "Empresas", moduleKey: "work-groups" },
       { key: "catalogs", title: "Catálogos", moduleKey: "catalogs" },
       { key: "service-types", title: "Tipos de servicios", moduleKey: "service-types" },
       { key: "audits", title: "Auditorías", moduleKey: "audits" },
@@ -693,7 +693,7 @@ function ProfileModal({ onClose }: { onClose: () => void }) {
                 <ProfileInfo label="Cargo" value={worker?.position || "-"} />
                 <ProfileInfo label="Telefono" value={worker?.phone || "-"} />
                 <ProfileInfo label="Correo personal" value={worker?.email || "-"} />
-                <ProfileInfo label="Grupo de trabajo" value={worker?.workGroupName || "-"} />
+                <ProfileInfo label="Empresa" value={worker?.workGroupName || "-"} />
                 <ProfileInfo label="Estado laboral" value={worker?.status === "active" ? "Activo" : worker?.status === "inactive" ? "Inactivo" : "-"} />
               </div>
             </section>

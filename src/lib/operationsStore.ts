@@ -41,6 +41,7 @@ export const workerSchema = z.object({
   bankName: optionalText,
   bankAccountType: optionalText,
   bankAccountNumber: optionalText,
+  socio: z.enum(["Si", "No"]).default("No"),
   status: z.enum(["active", "inactive"]).default("active"),
   documents: optionalText,
   assignedClientId: optionalText,

@@ -69,12 +69,12 @@ export default function WorkGroupsPage() {
           phone: item.phone,
         })));
     }
-    if (!groupsRes.ok) setStatus(groupsData.error || "No se pudo cargar grupos.");
+    if (!groupsRes.ok) setStatus(groupsData.error || "No se pudo cargar empresas.");
   }
 
   async function saveGroup(e: FormEvent) {
     e.preventDefault();
-    setStatus("Guardando grupo...");
+    setStatus("Guardando empresa...");
 
     const payload = {
       ...form,
@@ -90,27 +90,27 @@ export default function WorkGroupsPage() {
     });
     const data = await res.json().catch(() => ({}));
     if (!res.ok) {
-      setStatus(data.error || "No se pudo guardar el grupo.");
+      setStatus(data.error || "No se pudo guardar la empresa.");
       return;
     }
 
-    setStatus("Grupo guardado correctamente.");
+    setStatus("Empresa guardada correctamente.");
     await loadData();
     setSelectedId(data.item?._id || "new");
   }
 
   async function deleteGroup() {
     if (selectedId === "new") return;
-    if (!window.confirm("Eliminar este grupo?")) return;
+    if (!window.confirm("Eliminar esta empresa?")) return;
 
     const res = await fetch(`/api/admin/work-groups/${selectedId}`, { method: "DELETE" });
     const data = await res.json().catch(() => ({}));
     if (!res.ok) {
-      setStatus(data.error || "No se pudo eliminar el grupo.");
+      setStatus(data.error || "No se pudo eliminar la empresa.");
       return;
     }
 
-    setStatus("Grupo eliminado.");
+    setStatus("Empresa eliminada.");
     setSelectedId("new");
     await loadData();
   }
@@ -163,7 +163,7 @@ export default function WorkGroupsPage() {
       <section className="grid gap-6 lg:grid-cols-[0.7fr_1.3fr]">
         <aside className="rounded-lg border border-slate-200 bg-white p-4 shadow-sm">
           <button onClick={() => setSelectedId("new")} className="mb-4 w-full rounded-md bg-[#173C61] px-4 py-3 font-semibold text-white hover:bg-[#218F93]">
-            Nuevo grupo
+            Nueva empresa
           </button>
           <div className="space-y-2">
             {groups.map((group) => (
@@ -189,14 +189,14 @@ export default function WorkGroupsPage() {
           <div className="mb-5 flex flex-col gap-4 border-b border-slate-200 pb-5 sm:flex-row sm:items-center">
             <LogoPreview group={form} />
             <label className="grid gap-2 text-sm font-semibold text-slate-700">
-              Logo del grupo / empresa
+              Logo de la empresa
               <input type="file" accept="image/*" className={inputClass} disabled={uploadingLogo} onChange={(e) => uploadLogo(e.target.files?.[0])} />
-              <span className="text-xs font-normal text-slate-500">{uploadingLogo ? "Subiendo logo..." : "Se usara en roles y reportes del grupo."}</span>
+              <span className="text-xs font-normal text-slate-500">{uploadingLogo ? "Subiendo logo..." : "Se usara en roles y reportes de la empresa."}</span>
             </label>
           </div>
 
           <div className="grid gap-4 sm:grid-cols-2">
-            <Field label="Nombre comercial / grupo">
+            <Field label="Nombre comercial">
               <input required className={inputClass} value={form.commercialName || form.name} onChange={(e) => setForm({ ...form, commercialName: e.target.value, name: e.target.value })} />
             </Field>
             <Field label="RUC">
@@ -266,7 +266,7 @@ export default function WorkGroupsPage() {
           </section>
 
           <div className="mt-6 flex flex-wrap gap-3">
-            <button className="rounded-md bg-[#173C61] px-5 py-3 font-semibold text-white hover:bg-[#218F93]">Guardar grupo</button>
+            <button className="rounded-md bg-[#173C61] px-5 py-3 font-semibold text-white hover:bg-[#218F93]">Guardar empresa</button>
             {selectedId !== "new" && (
               <button type="button" onClick={deleteGroup} className="rounded-md border border-red-200 px-5 py-3 font-semibold text-red-700 hover:bg-red-50">
                 Eliminar

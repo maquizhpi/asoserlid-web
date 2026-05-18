@@ -141,9 +141,9 @@ export const adminModules: AdminModule[] = [
   },
   {
     key: "work-groups",
-    title: "Grupos de trabajo",
+    title: "Empresas",
     href: "/admin/grupos-trabajo",
-    description: "Catalogo de grupos, supervisores responsables y asignacion de personal.",
+    description: "Catalogo de empresas, representantes, datos bancarios y asignacion de personal.",
     collection: "work_groups",
     status: "ready",
     required: true,
