@@ -2,12 +2,14 @@ import "./globals.css";
 import type { Metadata } from "next";
 
 export const metadata: Metadata = {
-  title: "SIT - Sistema Integrado de Trabajo",
-  description: "Sistema Integrado de Trabajo para gestion operativa, administrativa y reportes.",
+  title: "ASOSERLID - Limpieza y Desinfección",
+  description: "ASOSERLID ofrece servicios profesionales de limpieza y desinfección con normas de calidad ISO/IEC 17024.",
   icons: {
-    icon: "/favicon.svg",
-    shortcut: "/favicon.svg",
-    apple: "/favicon.svg",
+    icon: [
+      { url: "/logo2.png", type: "image/png" },
+    ],
+    shortcut: "/logo2.png",
+    apple: "/logo2.png",
   },
 };
 

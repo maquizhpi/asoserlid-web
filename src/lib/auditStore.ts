@@ -2,7 +2,7 @@ import "server-only";
 
 import { ObjectId, type Document } from "mongodb";
 import { getAdminSession, hasModuleAccess } from "@/lib/adminAuth";
-import { getDb } from "@/lib/mongodb";
+import { getWebDb } from "@/lib/mongodb";
 import type { AuditLog } from "@/types/admin";
 
 const auditCollection = "audit_logs";
@@ -14,14 +14,14 @@ type AuditDocument = Omit<AuditLog, "_id" | "createdAt" | "restoredAt"> & {
 };
 
 export async function getAuditLogs() {
-  const db = await getDb();
+  const db = await getWebDb();
   const logs = await db.collection<AuditDocument>(auditCollection).find().sort({ createdAt: -1 }).limit(300).toArray();
   return logs.map(serializeAuditLog);
 }
 
 export async function recordAuditLog(input: Omit<AuditLog, "_id" | "createdAt" | "userId" | "userEmail" | "userRoles" | "restoredAt" | "restoredBy">) {
   const session = await getAdminSession();
-  const db = await getDb();
+  const db = await getWebDb();
   const document: AuditDocument = {
     ...input,
     userId: session?.userId,
@@ -38,7 +38,7 @@ export async function restoreAuditLog(id: string) {
     throw new Error("No autorizado.");
   }
 
-  const db = await getDb();
+  const db = await getWebDb();
   const session = await getAdminSession();
   const log = await db.collection<AuditDocument>(auditCollection).findOne({ _id: new ObjectId(id) });
   if (!log) throw new Error("Auditoria no encontrada.");

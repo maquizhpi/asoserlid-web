@@ -8,7 +8,7 @@ import Carousel from "@/components/Carousel";
 import ServiceModal from "@/components/ServiceModal";
 import ContactForm from "@/components/ContactForm";
 import CoursesMini from "@/components/CoursesMini";
-import type { CertificationItem, GalleryImage, ServiceType } from "@/types/admin";
+import type { CertificationItem, CourseItem, GalleryImage, ServiceType } from "@/types/admin";
 
 const servicios = [
   {
@@ -155,12 +155,16 @@ export default function Home() {
   const [selected, setSelected] = useState<number | null>(null);
   const [contactService, setContactService] = useState<string>("General");
   const [serviceItems, setServiceItems] = useState<typeof servicios>([]);
+  const [courseItems, setCourseItems] = useState<CourseItem[]>([]);
   const [galleryImages, setGalleryImages] = useState<GalleryImage[]>([]);
   const [certificationItems, setCertificationItems] = useState<CertificationItem[]>([]);
 
   const open = selected !== null;
   const visibleServices = serviceItems.length ? serviceItems : servicios;
   const current = selected !== null ? visibleServices[selected] : null;
+  const visibleCourses = courseItems.length
+    ? courseItems.map((item) => ({ t: item.title, st: item.subtitle, img: item.imageUrl, long: item.description }))
+    : cursos;
   const visibleCertifications = certificationItems.length
     ? certificationItems.map((item) => ({ src: item.fileUrl, alt: item.title }))
     : [
@@ -195,6 +199,7 @@ export default function Home() {
         setServiceItems(items);
       })
       .catch(() => undefined);
+    fetch("/api/content/courses").then((res) => res.json()).then((data) => setCourseItems(data.items || [])).catch(() => undefined);
     fetch("/api/content/gallery").then((res) => res.json()).then((data) => setGalleryImages(data.items || [])).catch(() => undefined);
     fetch("/api/content/certifications").then((res) => res.json()).then((data) => setCertificationItems(data.items || [])).catch(() => undefined);
   }, []);
@@ -379,7 +384,7 @@ export default function Home() {
         title="Cursos y capacitación"
         subtitle="Formación técnica para fortalecer la seguridad, eficiencia y calidad del personal operativo."
       >
-        <CoursesMini items={cursos} />
+        <CoursesMini items={visibleCourses} />
       </Section>
 
       <Section

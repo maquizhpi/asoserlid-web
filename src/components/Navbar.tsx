@@ -92,6 +92,16 @@ export default function Navbar() {
             </li>
           ))}
           <li>
+            <a
+              href="https://sistema-sit.online/admin"
+              target="_blank"
+              rel="noopener noreferrer"
+              className="rounded-md border border-[#218F93] px-4 py-2.5 font-semibold text-[#218F93] transition hover:bg-[#218F93] hover:text-white"
+            >
+              Sistema SIT
+            </a>
+          </li>
+          <li>
             <Link
               href="/admin"
               className="rounded-md border border-[#173C61] px-4 py-2.5 font-semibold text-[#173C61] transition hover:border-[#218F93] hover:text-[#218F93]"
@@ -141,6 +151,17 @@ export default function Navbar() {
               )}
             </li>
           ))}
+          <li className="pt-2">
+            <a
+              href="https://sistema-sit.online/admin"
+              target="_blank"
+              rel="noopener noreferrer"
+              className="block rounded-md border border-[#218F93] px-3 py-2.5 text-center font-semibold text-[#218F93] hover:bg-[#218F93] hover:text-white"
+              onClick={() => setOpen(false)}
+            >
+              Sistema SIT
+            </a>
+          </li>
           <li className="pt-2">
             <Link
               href="/admin"

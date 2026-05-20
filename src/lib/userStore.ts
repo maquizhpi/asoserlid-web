@@ -2,7 +2,7 @@ import "server-only";
 
 import { ObjectId } from "mongodb";
 import { z } from "zod";
-import { getDb } from "@/lib/mongodb";
+import { getWebDb } from "@/lib/mongodb";
 import { hashPassword, verifyPassword } from "@/lib/passwords";
 import { getDefaultAccessForRoles, getEffectiveModuleAccess } from "@/lib/roleAccess";
 import { roleLabels, userRoles } from "@/lib/userRoles";
@@ -33,7 +33,7 @@ export function getRoleOptions() {
 }
 
 export async function ensureDefaultAdminUser() {
-  const db = await getDb();
+  const db = await getWebDb();
   await db.collection<UserDocument>(usersCollection).createIndex({ email: 1 }, { unique: true });
 
   const email = normalizeEmail(process.env.ADMIN_EMAIL || "admin@asoserlid.com");
@@ -66,7 +66,7 @@ export async function validateUserCredentials(emailInput: string, password: stri
   const email = normalizeEmail(emailInput);
   if (!email || !password) return null;
 
-  const db = await getDb();
+  const db = await getWebDb();
   const user = await db.collection<UserDocument>(usersCollection).findOne({ email, active: true });
   if (!user) return null;
 
@@ -85,14 +85,14 @@ export async function validateUserCredentials(emailInput: string, password: stri
 
 export async function getUsers() {
   await ensureDefaultAdminUser();
-  const db = await getDb();
+  const db = await getWebDb();
   const users = await db.collection<UserDocument>(usersCollection).find().sort({ createdAt: -1 }).toArray();
   return users.map(serializeUser);
 }
 
 export async function getUserSummaries() {
   await ensureDefaultAdminUser();
-  const db = await getDb();
+  const db = await getWebDb();
   const users = await db
     .collection<UserDocument>(usersCollection)
     .find({}, { projection: { name: 1, email: 1, roles: 1, active: 1, createdAt: 1, updatedAt: 1 } })
@@ -114,7 +114,7 @@ export async function getUserById(id: string) {
   await ensureDefaultAdminUser();
   if (!ObjectId.isValid(id)) return null;
 
-  const db = await getDb();
+  const db = await getWebDb();
   const user = await db.collection<UserDocument>(usersCollection).findOne({ _id: new ObjectId(id) });
   return user ? serializeUser(user) : null;
 }
@@ -125,7 +125,7 @@ export async function createUser(input: unknown) {
     throw new Error("La contrasena es obligatoria para crear usuarios.");
   }
 
-  const db = await getDb();
+  const db = await getWebDb();
   await db.collection<UserDocument>(usersCollection).createIndex({ email: 1 }, { unique: true });
 
   const now = new Date();
@@ -153,7 +153,7 @@ export async function createUser(input: unknown) {
 
 export async function updateUser(id: string, input: unknown) {
   const data = normalizeUserInput(userInputSchema.parse(input));
-  const db = await getDb();
+  const db = await getWebDb();
   const update: Partial<UserDocument> = {
     workerId: data.workerId,
     workerDocumentId: data.workerDocumentId,
@@ -185,7 +185,7 @@ export async function changeUserPassword(id: string, currentPassword: string, ne
   if (!currentPassword) throw new Error("Ingresa la contrasena actual.");
   if (!nextPassword || nextPassword.length < 8) throw new Error("La nueva contrasena debe tener al menos 8 caracteres.");
 
-  const db = await getDb();
+  const db = await getWebDb();
   const user = await db.collection<UserDocument>(usersCollection).findOne({ _id: new ObjectId(id), active: true });
   if (!user) throw new Error("Usuario no encontrado.");
 
@@ -201,7 +201,7 @@ export async function changeUserPassword(id: string, currentPassword: string, ne
 }
 
 export async function deleteUser(id: string) {
-  const db = await getDb();
+  const db = await getWebDb();
   const user = await db.collection<UserDocument>(usersCollection).findOne({ _id: new ObjectId(id) });
   if (user?.roles.includes("administrator")) {
     const admins = await db.collection<UserDocument>(usersCollection).countDocuments({

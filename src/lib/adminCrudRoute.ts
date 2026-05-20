@@ -4,8 +4,8 @@ import { ObjectId, type Document, type Filter } from "mongodb";
 import { NextRequest, NextResponse } from "next/server";
 import { hasModuleAccess } from "@/lib/adminAuth";
 import { auditSummary, getRecordLabel, recordAuditLog, serializeSnapshot } from "@/lib/auditStore";
-import { getDb } from "@/lib/mongodb";
-import { createCrudStore, getOperationsErrorMessage } from "@/lib/operationsStore";
+import { getWebDb } from "@/lib/mongodb";
+import { createCrudStore, getContentErrorMessage } from "@/lib/contentStore";
 import type { z } from "zod";
 
 export function createAdminCrudHandlers<T>(collection: string, moduleKey: string, schema: z.ZodType<Omit<T, "_id" | "createdAt" | "updatedAt">>) {
@@ -17,7 +17,7 @@ export function createAdminCrudHandlers<T>(collection: string, moduleKey: string
       try {
         return NextResponse.json({ ok: true, items: await store.list(query) });
       } catch (error) {
-        return NextResponse.json({ ok: false, error: getOperationsErrorMessage(error) }, { status: 500 });
+        return NextResponse.json({ ok: false, error: getContentErrorMessage(error) }, { status: 500 });
       }
     },
 
@@ -37,7 +37,7 @@ export function createAdminCrudHandlers<T>(collection: string, moduleKey: string
         });
         return NextResponse.json({ ok: true, item }, { status: 201 });
       } catch (error) {
-        return NextResponse.json({ ok: false, error: getOperationsErrorMessage(error) }, { status: 400 });
+        return NextResponse.json({ ok: false, error: getContentErrorMessage(error) }, { status: 400 });
       }
     },
 
@@ -60,7 +60,7 @@ export function createAdminCrudHandlers<T>(collection: string, moduleKey: string
         }
         return item ? NextResponse.json({ ok: true, item }) : NextResponse.json({ ok: false, error: "No encontrado." }, { status: 404 });
       } catch (error) {
-        return NextResponse.json({ ok: false, error: getOperationsErrorMessage(error) }, { status: 400 });
+        return NextResponse.json({ ok: false, error: getContentErrorMessage(error) }, { status: 400 });
       }
     },
 
@@ -83,7 +83,7 @@ export function createAdminCrudHandlers<T>(collection: string, moduleKey: string
         }
         return deleted ? NextResponse.json({ ok: true }) : NextResponse.json({ ok: false, error: "No encontrado." }, { status: 404 });
       } catch (error) {
-        return NextResponse.json({ ok: false, error: getOperationsErrorMessage(error) }, { status: 400 });
+        return NextResponse.json({ ok: false, error: getContentErrorMessage(error) }, { status: 400 });
       }
     },
   };
@@ -91,7 +91,7 @@ export function createAdminCrudHandlers<T>(collection: string, moduleKey: string
 
 async function getRecord(collection: string, id: string) {
   if (!ObjectId.isValid(id)) return null;
-  const db = await getDb();
+  const db = await getWebDb();
   return db.collection<Document>(collection).findOne({ _id: new ObjectId(id) });
 }
 

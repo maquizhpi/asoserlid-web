@@ -1,19 +1,6 @@
 export type MachineStatus = "available" | "assigned" | "maintenance" | "inactive";
 export type MachineEnvironment = "hospitals" | "public_institutions" | "homes" | "workshops" | "companies" | "other";
-export type UserRole =
-  | "administrator"
-  | "general_manager"
-  | "general_accountant"
-  | "general_secretary"
-  | "general_supervisor"
-  | "supervisor"
-  | "operations"
-  | "human_resources"
-  | "accounting"
-  | "advertising"
-  | "legal_representative"
-  | "client"
-  | "worker";
+export type UserRole = "administrator";
 
 export type Machine = {
   _id?: string;
@@ -103,6 +90,18 @@ export type ServiceType = {
   regularPrice?: number;
   discountPercent?: number;
   offerPrice?: number;
+  status: "active" | "inactive";
+  createdAt?: string;
+  updatedAt?: string;
+};
+
+export type CourseItem = {
+  _id?: string;
+  title: string;
+  subtitle: string;
+  description?: string;
+  imageUrl?: string;
+  imagePublicId?: string;
   status: "active" | "inactive";
   createdAt?: string;
   updatedAt?: string;

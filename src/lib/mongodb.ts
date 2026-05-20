@@ -6,6 +6,7 @@ import { getServerEnv } from "@/lib/env";
 const env = getServerEnv();
 const uri = env.MONGODB_URI;
 const dbName = env.MONGODB_DB || "asoserlid_v2";
+const webDbName = env.MONGODB_WEB_DB || "asoserlid_web";
 
 type MongoGlobal = typeof globalThis & {
   _asoserlidMongoClient?: Promise<MongoClient>;
@@ -42,6 +43,11 @@ export async function getMongoClient() {
 export async function getDb(): Promise<Db> {
   const client = await getMongoClient();
   return client.db(dbName);
+}
+
+export async function getWebDb(): Promise<Db> {
+  const client = await getMongoClient();
+  return client.db(webDbName);
 }
 
 export function getMongoConnectionErrorMessage(error: unknown) {

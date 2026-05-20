@@ -4,9 +4,9 @@ import { getWebDb } from "@/lib/mongodb";
 export async function GET() {
   const db = await getWebDb();
   const items = await db
-    .collection("services")
+    .collection("courses")
     .find({ status: "active" })
-    .sort({ code: 1, createdAt: 1 })
+    .sort({ createdAt: 1 })
     .toArray();
 
   return NextResponse.json({

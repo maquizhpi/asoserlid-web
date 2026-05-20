@@ -1,6 +1,6 @@
 import { NextRequest } from "next/server";
 import { createAdminCrudHandlers } from "@/lib/adminCrudRoute";
-import { galleryImageSchema } from "@/lib/operationsStore";
+import { galleryImageSchema } from "@/lib/contentStore";
 import type { GalleryImage } from "@/types/admin";
 
 type RouteContext = { params: Promise<{ id: string }> };

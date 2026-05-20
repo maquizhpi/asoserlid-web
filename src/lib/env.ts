@@ -9,6 +9,7 @@ const serverEnvSchema = z.object({
   AUTH_SECRET: z.string().min(32, "AUTH_SECRET debe tener al menos 32 caracteres.").optional(),
   MONGODB_URI: z.string().min(1, "MONGODB_URI es obligatorio."),
   MONGODB_DB: z.string().min(1).optional(),
+  MONGODB_WEB_DB: z.string().min(1).optional(),
   SMTP_HOST: z.string().min(1).optional(),
   SMTP_PORT: z.coerce.number().int().positive().optional(),
   SMTP_USER: z.string().min(1).optional(),

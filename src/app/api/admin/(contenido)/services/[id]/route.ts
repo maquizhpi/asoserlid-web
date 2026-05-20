@@ -1,11 +1,11 @@
 import { NextRequest } from "next/server";
 import { createAdminCrudHandlers } from "@/lib/adminCrudRoute";
-import { certificationSchema } from "@/lib/contentStore";
-import type { CertificationItem } from "@/types/admin";
+import { serviceSchema } from "@/lib/contentStore";
+import type { ServiceType } from "@/types/admin";
 
 type RouteContext = { params: Promise<{ id: string }> };
 
-const handlers = createAdminCrudHandlers<CertificationItem>("certifications", "certifications", certificationSchema);
+const handlers = createAdminCrudHandlers<ServiceType>("services", "services", serviceSchema);
 
 export async function PUT(req: NextRequest, context: RouteContext) {
   const { id } = await context.params;

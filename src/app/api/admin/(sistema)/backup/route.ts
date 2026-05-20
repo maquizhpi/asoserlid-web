@@ -1,21 +1,12 @@
 import { NextResponse } from "next/server";
 import { hasModuleAccess } from "@/lib/adminAuth";
 import { recordAuditLog } from "@/lib/auditStore";
-import { getDb } from "@/lib/mongodb";
+import { getWebDb } from "@/lib/mongodb";
 
 const collections = [
   "users",
-  "workers",
-  "clients",
-  "contracts",
-  "supervisor_reports",
-  "hiring_processes",
-  "supply_products",
-  "supply_kits",
-  "supply_kit_deliveries",
-  "supply_movements",
-  "machines",
-  "notifications",
+  "courses",
+  "services",
   "blog_comments",
   "gallery_images",
   "certifications",
@@ -28,7 +19,7 @@ export async function GET() {
   }
 
   try {
-    const db = await getDb();
+    const db = await getWebDb();
     const data = Object.fromEntries(
       await Promise.all(collections.map(async (collection) => [collection, await db.collection(collection).find().toArray()]))
     );

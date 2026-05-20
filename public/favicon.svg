@@ -1,7 +1,14 @@
 <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 128 128">
-  <rect width="128" height="128" rx="28" fill="#0f2742"/>
-  <path d="M20 88h88l-8 18H28z" fill="#7dd3fc"/>
-  <path d="M26 83h76c8 0 14-7 12-15L104 25c-2-8-8-13-16-13H40c-8 0-14 5-16 13L14 68c-2 8 4 15 12 15z" fill="#38bdf8"/>
-  <path d="M27 73h74L93 32H35z" fill="#e0f2fe"/>
-  <text x="64" y="69" text-anchor="middle" font-family="Arial, Helvetica, sans-serif" font-size="38" font-weight="900" fill="#173C61">SIT</text>
+  <!-- Fondo circular color ASOSERLID -->
+  <circle cx="64" cy="64" r="64" fill="#33C3C9"/>
+
+  <!-- Gota de agua (símbolo del logo) -->
+  <path d="M64 18 C64 18 36 54 36 72 C36 88 48.5 100 64 100 C79.5 100 92 88 92 72 C92 54 64 18 64 18Z" fill="white"/>
+
+  <!-- Ondas internas de la gota -->
+  <path d="M46 74 Q52 66 60 72 Q66 77 72 70 Q78 63 84 68" stroke="#218F93" stroke-width="3" fill="none" stroke-linecap="round"/>
+
+  <!-- Figura de persona dentro de la gota (simplificada) -->
+  <circle cx="64" cy="52" r="6" fill="#173C61"/>
+  <path d="M56 70 Q60 60 64 58 Q68 60 72 70" fill="#173C61"/>
 </svg>
