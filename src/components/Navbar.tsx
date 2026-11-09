@@ -85,7 +85,7 @@ export default function Navbar() {
           </div>
         </Link>
 
-        <ul className="hidden items-center gap-5 text-sm font-medium lg:flex">
+        <ul className="hidden items-center gap-4 whitespace-nowrap text-sm font-medium lg:flex xl:gap-5">
           {links.map((l) => (
             <li key={l.type === "route" ? `${l.href}-${l.label}` : `${l.sectionId}-${l.label}`}>
               {renderNavLink(l, "text-slate-700 transition hover:text-[#218F93]")}
@@ -96,7 +96,7 @@ export default function Navbar() {
               href="https://sistema-sit.online/admin"
               target="_blank"
               rel="noopener noreferrer"
-              className="rounded-md border border-[#218F93] px-4 py-2.5 font-semibold text-[#218F93] transition hover:bg-[#218F93] hover:text-white"
+              className="inline-flex items-center rounded-md border border-[#218F93] px-4 py-2 font-semibold text-[#218F93] transition hover:bg-[#218F93] hover:text-white"
             >
               Sistema SIT
             </a>
@@ -104,7 +104,7 @@ export default function Navbar() {
           <li>
             <Link
               href="/admin"
-              className="rounded-md border border-[#173C61] px-4 py-2.5 font-semibold text-[#173C61] transition hover:border-[#218F93] hover:text-[#218F93]"
+              className="inline-flex items-center rounded-md border border-[#173C61] px-4 py-2 font-semibold text-[#173C61] transition hover:border-[#218F93] hover:text-[#218F93]"
             >
               Iniciar sesion
             </Link>
@@ -112,7 +112,7 @@ export default function Navbar() {
           <li>
             <Link
               href={{ pathname: "/", hash: "contacto" }}
-              className="rounded-md bg-[#173C61] px-4 py-2.5 font-semibold text-white transition hover:bg-[#218F93]"
+              className="inline-flex items-center rounded-md border border-[#173C61] bg-[#173C61] px-4 py-2 font-semibold text-white transition hover:border-[#218F93] hover:bg-[#218F93]"
             >
               Cotizar
             </Link>
